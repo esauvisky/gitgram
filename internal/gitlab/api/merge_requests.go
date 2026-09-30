@@ -104,6 +104,11 @@ func (c *Client) MRDiscussions(ctx context.Context, projectID, iid int64) (int, 
 	return unresolved, nil
 }
 
+// MRDiffs implements Reader.
+func (c *Client) MRDiffs(ctx context.Context, projectID, iid int64) ([]Diff, error) {
+	return getPages[Diff](ctx, c, fmt.Sprintf("/projects/%d/merge_requests/%d/diffs", projectID, iid), nil)
+}
+
 // MergeRequest implements Reader.
 func (c *Client) MergeRequest(ctx context.Context, projectID, iid int64) (*MR, error) {
 	var out MR

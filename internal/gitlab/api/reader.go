@@ -16,6 +16,9 @@ type Reader interface {
 	// MRDiscussions pages through GET .../merge_requests/:iid/discussions and
 	// returns the number of unresolved threads (notes[0].resolvable && !resolved).
 	MRDiscussions(ctx context.Context, projectID, iid int64) (int, error)
+	// MRDiffs pages through GET .../merge_requests/:iid/diffs: one entry per
+	// changed file.
+	MRDiffs(ctx context.Context, projectID, iid int64) ([]Diff, error)
 	// MergeRequest is GET /projects/:id/merge_requests/:iid.
 	MergeRequest(ctx context.Context, projectID, iid int64) (*MR, error)
 	// Pipeline is GET /projects/:id/pipelines/:pipeline_id.
@@ -23,6 +26,8 @@ type Reader interface {
 	// PipelineJobs pages through GET .../pipelines/:pipeline_id/jobs;
 	// includeRetried adds retried runs (include_retried=true).
 	PipelineJobs(ctx context.Context, projectID, id int64, includeRetried bool) ([]Job, error)
+	// JobTrace is GET /projects/:id/jobs/:job_id/trace: the job's raw log.
+	JobTrace(ctx context.Context, projectID, jobID int64) (string, error)
 	// GroupProjects lists every non-archived project under group (path or id),
 	// subgroups included, excluding projects merely shared with the group.
 	GroupProjects(ctx context.Context, group string) ([]Project, error)
