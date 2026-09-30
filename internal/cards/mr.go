@@ -35,6 +35,8 @@ type MRState struct {
 
 	Approvals ApprovalState
 	Threads   ThreadState
+	// Diff is what the MR changes, from the diffs API; nil until fetched.
+	Diff *DiffStats
 
 	// HeadPipelineID is head_pipeline_id from the last MR hook, 0 when
 	// unknown.

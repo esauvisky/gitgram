@@ -59,9 +59,35 @@ type PipelineState struct {
 	// history and are excluded by SortedJobs.
 	Jobs map[int64]JobState
 
+	// Artifacts lists the downloadable archives jobs produced, filled from
+	// the API once the pipeline is terminal.
+	Artifacts []Artifact
+
+	// Tails holds the last lines of job logs keyed by job id: the running
+	// job's live tail and each failed job's final tail. The engine's log
+	// tail loop maintains it; snapshot reduces leave it alone.
+	Tails map[int64]JobTail
+
 	// Final is true once a Pipeline Hook reported a terminal status and no
 	// live job is active. Blocked pipelines (manual, scheduled) are never
 	// final.
+	Final bool
+}
+
+// Artifact is one job's downloadable artifact archive.
+type Artifact struct {
+	JobID   int64
+	JobName string
+	// Size is bytes.
+	Size int64
+}
+
+// JobTail is the last lines of one job's log.
+type JobTail struct {
+	Lines []string
+	// FetchedAt is when Lines were read.
+	FetchedAt time.Time
+	// Final is true once the job finished and Lines will not change.
 	Final bool
 }
 
@@ -110,6 +136,9 @@ type ChildSummary struct {
 type PipelineSummary struct {
 	ProjectID int64
 	ID        int64
+	// IID is the project-scoped number shown as the anchor; 0 for
+	// job-hook skeletons that have not seen a Pipeline Hook.
+	IID int64
 	// Status is the pipeline's EffectiveStatus at the time of the summary.
 	Status string
 	URL    string
@@ -231,7 +260,7 @@ func (s *PipelineState) SortedJobs() []JobState {
 func (s *PipelineState) PipelineSummary() PipelineSummary {
 	live, failed, manual := s.counts()
 	return PipelineSummary{
-		ProjectID: s.Project.ID, ID: s.ID, Status: s.EffectiveStatus(), URL: s.URL,
+		ProjectID: s.Project.ID, ID: s.ID, IID: s.IID, Status: s.EffectiveStatus(), URL: s.URL,
 		Ref: s.Ref, SHA: s.SHA, Jobs: live, Failed: failed, Manual: manual, Final: s.Final,
 	}
 }
