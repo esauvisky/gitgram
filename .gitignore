@@ -4,3 +4,5 @@ config.yaml
 .env
 *.db
 *.db-*
+.impeccable/review/
+.impeccable/questions/
