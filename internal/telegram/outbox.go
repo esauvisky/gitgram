@@ -37,9 +37,11 @@ type OutboxItem struct {
 	// Generation is the row's coalesce counter at read time; DeleteOutbox
 	// only removes the row if it is still the same.
 	Generation int64
+	// SentChats lists the chats an OpSend or OpReply row already reached.
+	SentChats []int64
 }
 
-// Card is one card_messages row.
+// Card is a card's message in one chat.
 type Card struct {
 	ThreadID *int64
 	// MessageID is nil until the first send succeeded.
@@ -60,15 +62,20 @@ type Outbox interface {
 	// DeleteOutbox removes a processed or abandoned row, unless its
 	// generation changed since it was read (the row then stays queued).
 	DeleteOutbox(ctx context.Context, id, generation int64) error
+	// MarkOutboxSent records that an OpSend or OpReply row is done in chatID.
+	MarkOutboxSent(ctx context.Context, id, chatID int64) error
 
-	GetCard(ctx context.Context, kind string, projectID, objectID int64) (*Card, error)
-	// SetCardMessage records the first successful send: the thread actually
-	// used, the message id and the hash of what was sent.
-	SetCardMessage(ctx context.Context, kind string, projectID, objectID int64, threadID *int64, messageID int, hash string) error
-	// SetCardHash records the hash after a successful edit.
-	SetCardHash(ctx context.Context, kind string, projectID, objectID int64, hash string) error
-	// SetCardStatus marks a card CardDeleted or CardUneditable.
-	SetCardStatus(ctx context.Context, kind string, projectID, objectID int64, status string) error
+	// GetCard returns the card's message in chatID. In the primary chat nil
+	// means the engine never created the card; in any other chat a card
+	// never posted there comes back live with no message.
+	GetCard(ctx context.Context, chatID int64, kind string, projectID, objectID int64) (*Card, error)
+	// SetCardMessage records the first successful send in chatID: the
+	// thread actually used, the message id and the hash of what was sent.
+	SetCardMessage(ctx context.Context, chatID int64, kind string, projectID, objectID int64, threadID *int64, messageID int, hash string) error
+	// SetCardHash records the hash after a successful edit in chatID.
+	SetCardHash(ctx context.Context, chatID int64, kind string, projectID, objectID int64, hash string) error
+	// SetCardStatus marks the card CardDeleted or CardUneditable in chatID.
+	SetCardStatus(ctx context.Context, chatID int64, kind string, projectID, objectID int64, status string) error
 
 	// GetObject returns object_state.state_json for a card key.
 	GetObject(ctx context.Context, kind string, projectID, objectID int64) ([]byte, error)

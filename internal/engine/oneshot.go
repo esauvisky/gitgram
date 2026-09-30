@@ -11,15 +11,13 @@ import (
 	"github.com/esauvisky/gitgram/internal/store"
 )
 
-// applyOneShot renders push, tag, release and deployment events immediately
-// and queues them as standalone messages.
+// applyOneShot renders tag, release and deployment events immediately and
+// queues them as standalone messages.
 func (e *Engine) applyOneShot(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, ev event.Event) error {
 	opts := e.options(eff)
 	var msg render.Message
 	var class config.EventClass
 	switch v := ev.(type) {
-	case *event.Push:
-		msg, class = render.Push(v, v.Forced, eff.Push.MaxCommits, opts), config.EventPush
 	case *event.TagPush:
 		msg, class = render.TagPush(v, opts), config.EventTag
 	case *event.Release:

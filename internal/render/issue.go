@@ -42,8 +42,5 @@ func Issue(s *cards.IssueState, o Options) Message {
 	if f := changeFooter(s.LastChange, o); f != "" {
 		b.Line(f)
 	}
-	return Message{
-		HTML:     b.Truncate(o.limit(), s.URL),
-		Keyboard: [][]Button{{{Text: "Issue", URL: s.URL}}},
-	}
+	return Message{HTML: b.Truncate(o.limit(), s.URL)}
 }

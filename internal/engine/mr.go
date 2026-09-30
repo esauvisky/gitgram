@@ -78,6 +78,10 @@ func applyEnrichment(st *cards.MRState, en enrichment) bool {
 			changed = true
 		}
 	}
+	if en.diff != nil && (st.Diff == nil || st.Diff.FilesChanged != en.diff.FilesChanged || st.Diff.Added != en.diff.Added || st.Diff.Removed != en.diff.Removed || !slices.Equal(st.Diff.Files, en.diff.Files)) {
+		st.Diff = en.diff
+		changed = true
+	}
 	return changed
 }
 

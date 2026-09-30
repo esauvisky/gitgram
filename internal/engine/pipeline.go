@@ -14,7 +14,7 @@ import (
 // maintains links and dependent cards: the merge request(s) whose head
 // pipeline this is, and the parent pipeline when this is a child. The
 // pipeline's own card follows the verbosity and child_cards policy.
-func (e *Engine) applyPipeline(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, ev event.Event) error {
+func (e *Engine) applyPipeline(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, ev event.Event, en enrichment) error {
 	var key cards.Key
 	switch v := ev.(type) {
 	case *event.Pipeline:
@@ -32,6 +32,13 @@ func (e *Engine) applyPipeline(ctx context.Context, tx *store.Tx, eff config.Eff
 		changed = cards.ReducePipeline(st, v)
 	case *event.Job:
 		changed = cards.ReduceJob(st, v)
+	}
+	if mergeTails(st, en.tails) {
+		changed = true
+	}
+	if en.artifacts != nil && !slices.Equal(st.Artifacts, en.artifacts) {
+		st.Artifacts = en.artifacts
+		changed = true
 	}
 	if err := put(ctx, tx, key, st, st.Final, latest(row, ev.ReceivedAt())); err != nil {
 		return err
@@ -65,7 +72,7 @@ func (e *Engine) applyPipeline(ctx context.Context, tx *store.Tx, eff config.Eff
 	if !ownCard || !changed {
 		return nil
 	}
-	return e.enqueuePipelineCard(ctx, tx, eff, st)
+	return e.publishPipeline(ctx, tx, eff, key, st, ev.ReceivedAt())
 }
 
 // enqueuePipelineCard applies the card policy: nothing while the pipeline
@@ -160,5 +167,5 @@ func (e *Engine) updateParent(ctx context.Context, tx *store.Tx, parentKey cards
 	if err := put(ctx, tx, parentKey, parent, parent.Final, row.LastEventAt); err != nil {
 		return false, err
 	}
-	return true, e.enqueuePipelineCard(ctx, tx, e.cfg.Resolve(parent.Project.Path), parent)
+	return true, e.publishPipeline(ctx, tx, e.cfg.Resolve(parent.Project.Path), parentKey, parent, row.LastEventAt)
 }

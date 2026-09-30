@@ -13,16 +13,18 @@ import (
 // a plain struct literal and outbox payloads written as render.Message JSON
 // unmarshal into it directly.
 type Message struct {
+	// HTML is Bot API HTML for classic messages; Rich is rich message HTML.
+	// Exactly one is set.
 	HTML     string
+	Rich     string `json:",omitempty"`
 	Keyboard [][]Button
 }
 
-// Button is one inline keyboard button: URL opens a link, Data is
-// callback_data (an encoded actions.Callback). Exactly one should be set.
-// The JSON tags match render.Button so outbox payloads round-trip exactly.
+// Button is one inline keyboard button; Data is callback_data (an encoded
+// actions.Callback). The JSON tags match render.Button so outbox payloads
+// round-trip exactly.
 type Button struct {
 	Text string `json:"text"`
-	URL  string `json:"url,omitempty"`
 	Data string `json:"data,omitempty"`
 }
 
@@ -31,11 +33,20 @@ type Button struct {
 func (m Message) Hash() string {
 	h := sha256.New()
 	h.Write([]byte(m.HTML))
+	h.Write([]byte(m.Rich))
 	if len(m.Keyboard) > 0 {
 		kb, _ := json.Marshal(m.Keyboard)
 		h.Write(kb)
 	}
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// rich returns the InputRichMessage for a rich message, nil for classic.
+func (m Message) rich() *models.InputRichMessage {
+	if m.Rich == "" {
+		return nil
+	}
+	return &models.InputRichMessage{HTML: m.Rich, SkipEntityDetection: true}
 }
 
 // replyMarkup converts the keyboard to the bot model; nil when empty so the
@@ -51,7 +62,7 @@ func (m Message) replyMarkup() models.ReplyMarkup {
 		}
 		r := make([]models.InlineKeyboardButton, 0, len(row))
 		for _, b := range row {
-			r = append(r, models.InlineKeyboardButton{Text: b.Text, URL: b.URL, CallbackData: b.Data})
+			r = append(r, models.InlineKeyboardButton{Text: b.Text, CallbackData: b.Data})
 		}
 		rows = append(rows, r)
 	}

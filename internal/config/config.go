@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -27,10 +29,44 @@ type Config struct {
 // Telegram configures the bot transport and the destination chat.
 type Telegram struct {
 	Token         string           `yaml:"token"`
-	ChatID        int64            `yaml:"chat_id"`
+	ChatIDs       ChatIDs          `yaml:"chat_id"`
 	Mode          string           `yaml:"mode"` // webhook | polling
 	WebhookSecret string           `yaml:"webhook_secret"`
 	Threads       map[string]int64 `yaml:"threads"` // event class or "default" → forum topic id
+}
+
+// ChatIDs is telegram.chat_id: one id, a comma-separated list of ids, or a
+// YAML list. Every card goes to each chat; the first is the primary, the
+// one the bot's bookkeeping follows.
+type ChatIDs []int64
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+func (c *ChatIDs) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.SequenceNode:
+		var ids []int64
+		if err := n.Decode(&ids); err != nil {
+			return err
+		}
+		*c = ids
+		return nil
+	case yaml.ScalarNode:
+		var ids []int64
+		for _, part := range strings.Split(n.Value, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			id, err := strconv.ParseInt(part, 10, 64)
+			if err != nil {
+				return fmt.Errorf("line %d: telegram.chat_id: %q is not a chat id", n.Line, part)
+			}
+			ids = append(ids, id)
+		}
+		*c = ids
+		return nil
+	}
+	return fmt.Errorf("line %d: telegram.chat_id: want an id or a comma-separated list", n.Line)
 }
 
 // Server configures the HTTP listener and the public webhook paths.
@@ -85,8 +121,19 @@ type Branches struct {
 
 // Pipelines tunes pipeline cards.
 type Pipelines struct {
-	ChildCards   string `yaml:"child_cards"` // inline | own | both
-	QuietSuccess *bool  `yaml:"quiet_success"`
+	ChildCards   string  `yaml:"child_cards"` // inline | own | both
+	QuietSuccess *bool   `yaml:"quiet_success"`
+	LogTail      LogTail `yaml:"log_tail"`
+}
+
+// LogTail tunes the job log tails on pipeline cards: the last LiveLines of
+// each running job's log (one job per stage), refreshed every Interval and
+// removed when the job passes, and the last Lines of each failed job's log,
+// kept. Lines 0 disables both. Needs gitlab.read_token.
+type LogTail struct {
+	Lines     *int           `yaml:"lines"`
+	LiveLines *int           `yaml:"live_lines"`
+	Interval  *time.Duration `yaml:"interval"`
 }
 
 // MR tunes merge request cards.
@@ -183,6 +230,15 @@ func (c *Config) applyDefaults() {
 	}
 	if d.Pipelines.QuietSuccess == nil {
 		d.Pipelines.QuietSuccess = ptr(true)
+	}
+	if d.Pipelines.LogTail.Lines == nil {
+		d.Pipelines.LogTail.Lines = ptr(10)
+	}
+	if d.Pipelines.LogTail.LiveLines == nil {
+		d.Pipelines.LogTail.LiveLines = ptr(10)
+	}
+	if d.Pipelines.LogTail.Interval == nil {
+		d.Pipelines.LogTail.Interval = ptr(15 * time.Second)
 	}
 	if d.MR.CollapseNotes == nil {
 		d.MR.CollapseNotes = ptr(false)

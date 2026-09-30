@@ -25,17 +25,20 @@ const DefaultMaxLen = 4096
 // between our count and Telegram's never push a message over the limit.
 const Margin = 200
 
-// Button is one inline keyboard button. Exactly one of URL or Data is set.
+// Button is one inline keyboard button carrying callback data.
 type Button struct {
 	Text string `json:"text"`
-	URL  string `json:"url,omitempty"`
 	Data string `json:"data,omitempty"`
 }
 
 // Message is a rendered Telegram message: HTML body plus inline keyboard
 // rows (nil when the message has no buttons).
 type Message struct {
+	// HTML is Bot API HTML for classic messages; Rich is rich message HTML
+	// (headings, tables, details, footers, in-message buttons). Exactly one
+	// is set.
 	HTML     string
+	Rich     string
 	Keyboard [][]Button
 }
 
@@ -44,6 +47,7 @@ type Message struct {
 func (m Message) Hash() string {
 	h := sha256.New()
 	h.Write([]byte(m.HTML))
+	h.Write([]byte(m.Rich))
 	kb, err := json.Marshal(m.Keyboard)
 	if err != nil {
 		panic(err)
@@ -58,8 +62,6 @@ type Options struct {
 	Verbosity string
 	// Mentions maps GitLab usernames to Telegram user ids.
 	Mentions map[string]int64
-	// Caps decides which action buttons are drawn; nil draws none.
-	Caps actions.Capabilities
 	// MaxLen is the message length limit; 0 means DefaultMaxLen. Messages
 	// are truncated to MaxLen-Margin.
 	MaxLen int
@@ -69,6 +71,52 @@ type Options struct {
 	// Location is the zone for clock times such as "started 14:05"; nil is
 	// UTC.
 	Location *time.Location
+	// Caps decides which in-message operation buttons are drawn; nil draws
+	// none.
+	Caps actions.Capabilities
+}
+
+func (o Options) can(k actions.Kind, a actions.Action) bool {
+	return o.Caps != nil && o.Caps.Can(k, a)
+}
+
+// actionButton encodes a callback button; it returns false when the
+// callback cannot be encoded.
+func actionButton(text string, cb actions.Callback) (Button, bool) {
+	data, err := cb.Encode()
+	if err != nil {
+		return Button{}, false
+	}
+	return Button{Text: text, Data: data}, true
+}
+
+// lead is every card's first block: who (bold handle) did what in which
+// project, in small text, then a separator. verb is the past-tense phrase
+// between the actor and the linked project name, e.g. "pushed to".
+func (o Options) lead(d *htmlfmt.Doc, actor event.User, verb string, p event.Project) {
+	name := p.Name
+	if name == "" {
+		name = p.Path
+	}
+	project := htmlfmt.Esc(name)
+	if p.WebURL != "" {
+		project = htmlfmt.A(name, p.WebURL)
+	}
+	line := htmlfmt.Esc(verb) + " " + project
+	if !actor.IsZero() {
+		line = "<b>" + o.handle(actor) + "</b> " + line
+	}
+	d.Block(htmlfmt.Footer(line))
+	d.Block(htmlfmt.Divider())
+}
+
+// updated is the closing footer's timestamp fragment. Renders are pure, so
+// the time is the card's last event time, passed in by the renderer.
+func (o Options) updated(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return "Updated " + o.clock(t)
 }
 
 func (o Options) limit() int {
@@ -79,13 +127,19 @@ func (o Options) limit() int {
 	return max - Margin
 }
 
-func (o Options) can(k actions.Kind, a actions.Action) bool {
-	return o.Caps != nil && o.Caps.Can(k, a)
+// user renders a user as an italic @handle, a Telegram mention when
+// mapped; the display name in italics when the payload carries no handle.
+func (o Options) user(u event.User) string {
+	return "<i>" + o.handle(u) + "</i>"
 }
 
-// user renders a user's display name, as a Telegram mention when mapped.
-func (o Options) user(u event.User) string {
-	return htmlfmt.Mention(displayName(u), htmlfmt.MentionID(o.Mentions, u.Username))
+// handle is the @handle (or display name) as a mention when mapped.
+func (o Options) handle(u event.User) string {
+	name := displayName(u)
+	if u.Username != "" {
+		name = "@" + u.Username
+	}
+	return htmlfmt.Mention(name, htmlfmt.MentionID(o.Mentions, u.Username))
 }
 
 // users renders a user list joined with ", ".
@@ -116,18 +170,17 @@ func displayName(u event.User) string {
 	return "someone"
 }
 
-// actionButton encodes a callback button; it returns false when the
-// callback cannot be encoded.
-func actionButton(text string, cb actions.Callback) (Button, bool) {
-	data, err := cb.Encode()
-	if err != nil {
-		return Button{}, false
-	}
-	return Button{Text: text, Data: data}, true
-}
-
 // humanize turns a snake_case status into words.
 func humanize(s string) string { return strings.ReplaceAll(s, "_", " ") }
+
+// clip shortens text to max runes, ending in an ellipsis when it cut.
+func clip(text string, max int) string {
+	r := []rune(text)
+	if len(r) <= max {
+		return text
+	}
+	return strings.TrimRight(string(r[:max-1]), " ") + "…"
+}
 
 // plural returns "n word" or "n words".
 func plural(n int, word string) string {

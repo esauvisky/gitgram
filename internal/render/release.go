@@ -46,9 +46,5 @@ func Release(r *event.Release, o Options) Message {
 		}
 		b.Line(EmojiLink + " " + strings.Join(parts, " · "))
 	}
-	var kb [][]Button
-	if r.URL != "" {
-		kb = [][]Button{{{Text: "Release", URL: r.URL}}}
-	}
-	return Message{HTML: b.Truncate(o.limit(), r.URL), Keyboard: kb}
+	return Message{HTML: b.Truncate(o.limit(), r.URL)}
 }

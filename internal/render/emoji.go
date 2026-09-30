@@ -21,7 +21,7 @@ const (
 	EmojiMRClosed = "🔴"
 	EmojiMRDraft  = "📝"
 
-	EmojiPush          = "📤"
+	EmojiPush          = "↗\ufe0e"
 	EmojiForce         = "⚠️"
 	EmojiTag           = "🏷️"
 	EmojiNewBranch     = "🌱"
@@ -36,14 +36,47 @@ const (
 	EmojiUser     = "👤"
 	EmojiPeople   = "👥"
 	EmojiLabel    = "🏷"
-	EmojiApprove  = "👍"
 	EmojiConflict = "⚔️"
-	EmojiEdit     = "✏️"
 	EmojiLink     = "🔗"
 	EmojiLock     = "🔒"
 	EmojiChild    = "↳"
-	EmojiParent   = "↰"
+
+	EmojiArtifacts = "📦"
 )
+
+// statusWord spells out a pipeline or job status so no lamp ever stands
+// alone; a failed job that is allowed to fail says so.
+func statusWord(status string, allowFailure bool) string {
+	switch status {
+	case event.StatusSuccess:
+		return "Passed"
+	case event.StatusFailed:
+		if allowFailure {
+			return "Failed (allowed)"
+		}
+		return "Failed"
+	case event.StatusRunning:
+		return "Running"
+	case event.StatusCanceling:
+		return "Canceling"
+	case event.StatusCanceled:
+		return "Canceled"
+	case event.StatusSkipped:
+		return "Skipped"
+	case event.StatusManual:
+		return "Waiting for manual"
+	case event.StatusScheduled:
+		return "Scheduled"
+	case event.StatusCreated, event.StatusPending, event.StatusWaitingForResource, event.StatusPreparing, event.StatusWaitingForCallback:
+		return "Pending"
+	}
+	return humanize(status)
+}
+
+// lamp is a status emoji followed by its word.
+func lamp(status string, allowFailure bool) string {
+	return statusEmoji(status, allowFailure) + " " + statusWord(status, allowFailure)
+}
 
 // statusEmoji maps a pipeline or job status to its emoji; a failed job that
 // is allowed to fail is a warning.

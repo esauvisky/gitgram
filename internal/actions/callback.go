@@ -24,7 +24,6 @@ type Kind byte
 // Callback kinds.
 const (
 	KindPipeline     Kind = 'p'
-	KindJob          Kind = 'j'
 	KindMergeRequest Kind = 'm'
 	KindIssue        Kind = 'i'
 )
@@ -34,24 +33,20 @@ type Action string
 
 // Actions foreseen for v2. Capabilities decides which are offered.
 const (
-	ActionRetry   Action = "retry"
 	ActionCancel  Action = "cancel"
-	ActionPlay    Action = "play"
 	ActionApprove Action = "approve"
 	ActionMerge   Action = "merge"
 	ActionRefresh Action = "refresh"
 )
 
 // Callback is the decoded callback_data of an inline button. The wire format
-// is "ver:kind:projectID:objectID:action[:arg]", e.g. "1:p:1234:987654:retry".
-// Arg is optional and may itself contain colons.
+// is "ver:kind:projectID:objectID:action", e.g. "1:p:1234:987654:cancel".
 type Callback struct {
 	Ver       uint8
 	Kind      Kind
 	ProjectID int64
 	ObjectID  int64
 	Action    Action
-	Arg       string
 }
 
 // ErrInvalid is wrapped by Decode errors.
@@ -74,9 +69,6 @@ func (c Callback) Encode() (string, error) {
 	}
 	s := strconv.FormatUint(uint64(ver), 10) + ":" + string(c.Kind) + ":" +
 		strconv.FormatInt(c.ProjectID, 10) + ":" + strconv.FormatInt(c.ObjectID, 10) + ":" + string(c.Action)
-	if c.Arg != "" {
-		s += ":" + c.Arg
-	}
 	if len(s) > MaxLen {
 		return "", fmt.Errorf("%w: %d", ErrTooLong, len(s))
 	}
@@ -85,8 +77,8 @@ func (c Callback) Encode() (string, error) {
 
 // Decode parses callback_data produced by Encode. Errors wrap ErrInvalid.
 func Decode(s string) (Callback, error) {
-	parts := strings.SplitN(s, ":", 6)
-	if len(parts) < 5 {
+	parts := strings.Split(s, ":")
+	if len(parts) != 5 {
 		return Callback{}, fmt.Errorf("%w: %q", ErrInvalid, s)
 	}
 	ver, err := strconv.ParseUint(parts[0], 10, 8)
@@ -110,9 +102,6 @@ func Decode(s string) (Callback, error) {
 	c := Callback{
 		Ver: uint8(ver), Kind: Kind(parts[1][0]), ProjectID: projectID, ObjectID: objectID,
 		Action: Action(parts[4]),
-	}
-	if len(parts) == 6 {
-		c.Arg = parts[5]
 	}
 	return c, nil
 }

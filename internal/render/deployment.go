@@ -41,22 +41,11 @@ func Deployment(d *event.Deployment, o Options) Message {
 		b.Line(strings.Join(parts, " · "))
 	}
 
-	var row []Button
-	if d.DeployableURL != "" {
-		row = append(row, Button{Text: "Job", URL: d.DeployableURL})
-	}
-	if d.EnvironmentURL != "" {
-		row = append(row, Button{Text: "Environment", URL: d.EnvironmentURL})
-	}
-	var kb [][]Button
-	if len(row) > 0 {
-		kb = [][]Button{row}
-	}
 	more := d.DeployableURL
 	if more == "" {
 		more = d.Project.WebURL + "/-/environments"
 	}
-	return Message{HTML: b.Truncate(o.limit(), more), Keyboard: kb}
+	return Message{HTML: b.Truncate(o.limit(), more)}
 }
 
 func deploymentText(status string) string {

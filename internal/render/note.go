@@ -29,11 +29,7 @@ func Note(n *event.Note, anchorKnown bool, o Options) Message {
 	if body := strings.TrimSpace(n.Body); body != "" {
 		b.Quote(htmlfmt.RewriteMentions(htmlfmt.Esc(body), o.Mentions), true)
 	}
-	var kb [][]Button
-	if n.URL != "" {
-		kb = [][]Button{{{Text: "Comment", URL: n.URL}}}
-	}
-	return Message{HTML: b.Truncate(o.limit(), n.URL), Keyboard: kb}
+	return Message{HTML: b.Truncate(o.limit(), n.URL)}
 }
 
 // noteTarget names what the note is attached to, linked when possible.

@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 )
 
 // validate checks every field and compiles branch matchers. It returns one
@@ -44,8 +45,18 @@ func (c *Config) validate() []error {
 	if c.Telegram.Token == "" {
 		bad("telegram.token: required")
 	}
-	if c.Telegram.ChatID == 0 {
+	if len(c.Telegram.ChatIDs) == 0 {
 		bad("telegram.chat_id: required")
+	}
+	seenChat := map[int64]bool{}
+	for _, id := range c.Telegram.ChatIDs {
+		switch {
+		case id == 0:
+			bad("telegram.chat_id: 0 is not a chat id")
+		case seenChat[id]:
+			bad("telegram.chat_id: %d listed twice", id)
+		}
+		seenChat[id] = true
 	}
 	oneOf("telegram.mode", c.Telegram.Mode, "webhook", "polling")
 	if c.Telegram.Mode == "webhook" {
@@ -115,6 +126,15 @@ func (s *Settings) validate(field string) []error {
 	}
 	if s.Pipelines.ChildCards != "" && !slices.Contains([]string{"inline", "own", "both"}, s.Pipelines.ChildCards) {
 		bad("pipelines.child_cards: %q must be one of inline|own|both", s.Pipelines.ChildCards)
+	}
+	if s.Pipelines.LogTail.Lines != nil && (*s.Pipelines.LogTail.Lines < 0 || *s.Pipelines.LogTail.Lines > 50) {
+		bad("pipelines.log_tail.lines: must be 0..50, got %d", *s.Pipelines.LogTail.Lines)
+	}
+	if s.Pipelines.LogTail.LiveLines != nil && (*s.Pipelines.LogTail.LiveLines < 1 || *s.Pipelines.LogTail.LiveLines > 20) {
+		bad("pipelines.log_tail.live_lines: must be 1..20, got %d", *s.Pipelines.LogTail.LiveLines)
+	}
+	if s.Pipelines.LogTail.Interval != nil && *s.Pipelines.LogTail.Interval < 5*time.Second {
+		bad("pipelines.log_tail.interval: must be at least 5s, got %s", *s.Pipelines.LogTail.Interval)
 	}
 	if s.Push.MaxCommits != nil && *s.Push.MaxCommits < 1 {
 		bad("push.max_commits: must be at least 1, got %d", *s.Push.MaxCommits)

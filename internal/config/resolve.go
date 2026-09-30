@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 // EffectiveProject is the fully merged view of the settings that apply to
 // one GitLab project: `defaults:` overlaid with the matching `projects[]`
@@ -20,8 +23,11 @@ type EffectiveProject struct {
 
 // PipelineSettings is the resolved `pipelines:` block.
 type PipelineSettings struct {
-	ChildCards   string
-	QuietSuccess bool
+	ChildCards       string
+	QuietSuccess     bool
+	LogTailLines     int
+	LogTailLiveLines int
+	LogTailInterval  time.Duration
 }
 
 // MRSettings is the resolved `mr:` block.
@@ -45,7 +51,10 @@ func (c *Config) Resolve(projectPath string) EffectiveProject {
 		Events:    d.Events,
 		Verbosity: d.Verbosity,
 		Branches:  d.Branches,
-		Pipelines: PipelineSettings{ChildCards: d.Pipelines.ChildCards, QuietSuccess: *d.Pipelines.QuietSuccess},
+		Pipelines: PipelineSettings{
+			ChildCards: d.Pipelines.ChildCards, QuietSuccess: *d.Pipelines.QuietSuccess,
+			LogTailLines: *d.Pipelines.LogTail.Lines, LogTailLiveLines: *d.Pipelines.LogTail.LiveLines, LogTailInterval: *d.Pipelines.LogTail.Interval,
+		},
 		MR: MRSettings{
 			CollapseNotes:   *d.MR.CollapseNotes,
 			ShowDescription: *d.MR.ShowDescription,
@@ -81,6 +90,15 @@ func (p *EffectiveProject) apply(s *Settings) {
 	}
 	if s.Pipelines.QuietSuccess != nil {
 		p.Pipelines.QuietSuccess = *s.Pipelines.QuietSuccess
+	}
+	if s.Pipelines.LogTail.Lines != nil {
+		p.Pipelines.LogTailLines = *s.Pipelines.LogTail.Lines
+	}
+	if s.Pipelines.LogTail.LiveLines != nil {
+		p.Pipelines.LogTailLiveLines = *s.Pipelines.LogTail.LiveLines
+	}
+	if s.Pipelines.LogTail.Interval != nil {
+		p.Pipelines.LogTailInterval = *s.Pipelines.LogTail.Interval
 	}
 	if s.MR.CollapseNotes != nil {
 		p.MR.CollapseNotes = *s.MR.CollapseNotes

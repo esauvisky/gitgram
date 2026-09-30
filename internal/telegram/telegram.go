@@ -26,8 +26,9 @@ const (
 
 // Options configures New.
 type Options struct {
-	// ChatID is the one group every message goes to.
-	ChatID int64
+	// ChatIDs are the groups the bot serves: commands are accepted from
+	// any of them.
+	ChatIDs []int64
 	// Mode is ModeWebhook or ModePolling.
 	Mode string
 	// PublicURL is the externally reachable base URL (no trailing slash);
@@ -43,13 +44,33 @@ type Options struct {
 	// OnCallback handles a decoded inline-button press. Nil answers every
 	// button with actions.Unsupported.
 	OnCallback func(context.Context, actions.Request) actions.Result
+	// Commands lists the slash commands the bot answers, registered with
+	// Telegram at Start so they autocomplete; OnCommand receives them.
+	Commands  []Command
+	OnCommand func(context.Context, CommandCall)
 }
 
-// Client is the bot connection for one chat.
+// Command is one slash command the bot offers.
+type Command struct {
+	Name        string
+	Description string
+}
+
+// CommandCall is a slash command someone sent in the chat.
+type CommandCall struct {
+	Name      string
+	Args      string
+	ChatID    int64
+	UserID    int64
+	MessageID int
+}
+
+// Client is the bot connection.
 type Client struct {
 	bot  *bot.Bot
 	opts Options
 	log  *slog.Logger
+	me   int64
 }
 
 // New builds the client without touching the network (getMe is skipped;
@@ -87,6 +108,7 @@ func New(token string, opts Options) (*Client, error) {
 	}
 	c.bot = b
 	c.registerCallbackRoute()
+	c.registerCommandRoute()
 	return c, nil
 }
 
@@ -96,6 +118,7 @@ func (c *Client) Me(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("telegram: getMe: %w", err)
 	}
+	c.me = me.ID
 	return me.Username, nil
 }
 
@@ -104,6 +127,15 @@ func (c *Client) Me(ctx context.Context) (string, error) {
 // secret token and allowed_updates [message, callback_query]; polling mode
 // deletes any webhook and long-polls. Setup errors are returned synchronously.
 func (c *Client) Start(ctx context.Context) error {
+	if len(c.opts.Commands) > 0 {
+		cmds := make([]models.BotCommand, len(c.opts.Commands))
+		for i, cmd := range c.opts.Commands {
+			cmds[i] = models.BotCommand{Command: cmd.Name, Description: cmd.Description}
+		}
+		if _, err := c.bot.SetMyCommands(ctx, &bot.SetMyCommandsParams{Commands: cmds}); err != nil {
+			return fmt.Errorf("telegram: setMyCommands: %w", err)
+		}
+	}
 	switch c.opts.Mode {
 	case ModeWebhook:
 		url := strings.TrimRight(c.opts.PublicURL, "/") + c.opts.WebhookPath + "/" + c.opts.WebhookSecret
@@ -122,6 +154,23 @@ func (c *Client) Start(ctx context.Context) error {
 		}
 		c.log.Info("telegram polling started")
 		go c.bot.Start(ctx)
+	}
+	return nil
+}
+
+// SetOnCommand installs the command handler after construction, for
+// callers whose handler needs things built after New.
+func (c *Client) SetOnCommand(fn func(context.Context, CommandCall)) { c.opts.OnCommand = fn }
+
+// Reply posts a plain-text reply to a message in chatID, outside the
+// outbox: for command acknowledgements only.
+func (c *Client) Reply(ctx context.Context, chatID int64, messageID int, text string) error {
+	_, err := c.bot.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: chatID, Text: text,
+		ReplyParameters: &models.ReplyParameters{MessageID: messageID, AllowSendingWithoutReply: true},
+	})
+	if err != nil {
+		return fmt.Errorf("telegram: reply: %w", err)
 	}
 	return nil
 }

@@ -6,8 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/esauvisky/gitgram/internal/actions"
 	"github.com/esauvisky/gitgram/internal/config"
 	"github.com/esauvisky/gitgram/internal/engine"
 	"github.com/esauvisky/gitgram/internal/gitlab/api"
@@ -52,6 +55,7 @@ func runServe(ctx context.Context, args []string) error {
 		"gitlab_group", cfg.GitLab.Group,
 		"projects", len(cfg.Projects),
 		"enrichment", cfg.GitLab.ReadToken != "",
+		"actions", cfg.GitLab.HooksToken != "",
 	)
 
 	st, err := store.Open(cfg.Storage.Path)
@@ -65,14 +69,32 @@ func runServe(ctx context.Context, args []string) error {
 	if cfg.GitLab.ReadToken != "" {
 		reader = api.New(cfg.GitLab.BaseURL, cfg.GitLab.ReadToken, logger)
 	}
+	var writer api.Writer
+	if cfg.GitLab.HooksToken != "" {
+		writer = api.New(cfg.GitLab.BaseURL, cfg.GitLab.HooksToken, logger)
+	}
 
+	// The engine notifies the sender, the sender renders through the
+	// engine, and button presses dispatch into the engine; the closures
+	// break the construction cycle.
+	var sender *telegram.Sender
+	var eng *engine.Engine
 	client, err := telegram.New(cfg.Telegram.Token, telegram.Options{
-		ChatID:        cfg.Telegram.ChatID,
+		ChatIDs:       cfg.Telegram.ChatIDs,
 		Mode:          cfg.Telegram.Mode,
 		PublicURL:     cfg.Server.PublicBaseURL,
 		WebhookPath:   cfg.Server.TelegramWebhookPath,
 		WebhookSecret: cfg.Telegram.WebhookSecret,
 		Logger:        logger,
+		OnCallback: func(ctx context.Context, req actions.Request) actions.Result {
+			res, err := eng.Dispatch(ctx, req)
+			if err != nil {
+				logger.Error("action dispatch", "err", err)
+				return actions.Result{Toast: "Something went wrong.", Alert: true}
+			}
+			return res
+		},
+		Commands: []telegram.Command{{Name: "preview", Description: "Send mock cards of every kind, or of the scenarios named"}},
 	})
 	if err != nil {
 		return err
@@ -81,13 +103,11 @@ func runServe(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	logger.Info("telegram bot verified", "username", username, "chat_id", cfg.Telegram.ChatID)
+	logger.Info("telegram bot verified", "username", username, "chat_ids", cfg.Telegram.ChatIDs)
 
-	// The engine notifies the sender and the sender renders through the
-	// engine; the closure breaks the construction cycle.
-	var sender *telegram.Sender
-	eng := engine.New(cfg, st, reader, func() { sender.Notify() }, logger)
-	sender = telegram.NewSender(client, outboxAdapter{st: st}, eng, logger)
+	eng = engine.New(cfg, st, reader, writer, func() { sender.Notify() }, logger)
+	chats := cfg.Telegram.ChatIDs
+	sender = telegram.NewSender(client, chats, outboxAdapter{st: st, primary: chats[0]}, eng, logger)
 
 	srv := httpserver.New(httpserver.Options{
 		Addr:   cfg.Server.Listen,
@@ -109,6 +129,31 @@ func runServe(ctx context.Context, args []string) error {
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	defer cancelRun()
 
+	// /preview runs the mock scenarios from a throwaway store beside the
+	// live one, one run at a time, into the chat that asked.
+	var previewBusy atomic.Bool
+	client.SetOnCommand(func(ctx context.Context, call telegram.CommandCall) {
+		if call.Name != "preview" {
+			return
+		}
+		if !previewBusy.CompareAndSwap(false, true) {
+			_ = client.Reply(ctx, call.ChatID, call.MessageID, "A preview is already running.")
+			return
+		}
+		scenarios := []string{"all"}
+		if call.Args != "" {
+			scenarios = strings.Split(strings.ReplaceAll(call.Args, " ", ","), ",")
+		}
+		logger.Info("preview: requested from chat", "chat", call.ChatID, "user", call.UserID, "scenarios", scenarios)
+		go func() {
+			defer previewBusy.Store(false)
+			if err := runPreviewWith(runCtx, cfg, client, []int64{call.ChatID}, logger, "", scenarios, 4*time.Second); err != nil {
+				logger.Warn("preview failed", "err", err)
+				_ = client.Reply(runCtx, call.ChatID, call.MessageID, "Preview failed: "+err.Error())
+			}
+		}()
+	})
+
 	if err := client.Start(runCtx); err != nil {
 		return err
 	}
@@ -118,6 +163,7 @@ func runServe(ctx context.Context, args []string) error {
 		sender.Run(runCtx)
 	}()
 	go eng.RunReconciler(runCtx, reconcileInterval)
+	go eng.RunLogTail(runCtx, cfg.Resolve("").Pipelines.LogTailInterval)
 	go eng.RunJanitor(runCtx, janitorInterval)
 
 	errc := make(chan error, 1)

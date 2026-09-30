@@ -29,19 +29,21 @@ type Engine struct {
 	cfg    *config.Config
 	st     *store.Store
 	api    api.Reader
+	writer api.Writer
 	notify func()
 	log    *slog.Logger
 }
 
 // New returns an Engine. reader may be nil when no gitlab.read_token is
-// configured: enrichment and the reconciler are then disabled. notify is
-// called after every committed transaction that added outbox rows (the
-// sender's Notify).
-func New(cfg *config.Config, st *store.Store, reader api.Reader, notify func(), logger *slog.Logger) *Engine {
+// configured: enrichment, log tails and the reconciler are then disabled.
+// writer may be nil when no gitlab.hooks_token is configured: cards then
+// carry no action buttons. notify is called after every committed
+// transaction that added outbox rows (the sender's Notify).
+func New(cfg *config.Config, st *store.Store, reader api.Reader, writer api.Writer, notify func(), logger *slog.Logger) *Engine {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Engine{cfg: cfg, st: st, api: reader, notify: notify, log: logger}
+	return &Engine{cfg: cfg, st: st, api: reader, writer: writer, notify: notify, log: logger}
 }
 
 // Handle processes one webhook delivery. It returns an error only when the
@@ -101,14 +103,19 @@ func (e *Engine) Handle(ctx context.Context, deliveryKey string, ev event.Event)
 func (e *Engine) apply(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, ev event.Event, en enrichment) error {
 	switch v := ev.(type) {
 	case *event.Pipeline, *event.Job:
-		return e.applyPipeline(ctx, tx, eff, ev)
+		return e.applyPipeline(ctx, tx, eff, ev, en)
 	case *event.MergeRequest:
 		return e.applyMR(ctx, tx, eff, v, en)
 	case *event.Note:
 		return e.applyNote(ctx, tx, eff, v)
 	case *event.Issue:
 		return e.applyIssue(ctx, tx, eff, v)
-	case *event.Push, *event.TagPush, *event.Release, *event.Deployment:
+	case *event.Push:
+		if v.IsDelete() {
+			return e.applyBranchDeleted(ctx, tx, eff, v)
+		}
+		return e.applyPush(ctx, tx, eff, v, en)
+	case *event.TagPush, *event.Release, *event.Deployment:
 		return e.applyOneShot(ctx, tx, eff, ev)
 	}
 	e.log.Warn("unhandled event type", "kind", ev.EventKind())

@@ -5,6 +5,7 @@
 //
 //	serve       --config path [--poll]
 //	sync-hooks  --config path [--dry-run] [--group-hook]
+//	preview     --config path [--scenario all] [--delay 4s] [--db path]
 //	healthcheck [--url http://127.0.0.1:8080/healthz]
 package main
 
@@ -35,6 +36,8 @@ func main() {
 		err = runServe(ctx, os.Args[2:])
 	case "sync-hooks":
 		err = runSyncHooks(ctx, os.Args[2:])
+	case "preview":
+		err = runPreview(ctx, os.Args[2:])
 	case "healthcheck":
 		err = runHealthcheck(ctx, os.Args[2:])
 	case "version":
@@ -58,7 +61,8 @@ func usage() {
 Usage:
   gitgram serve       --config %s [--poll]
   gitgram sync-hooks  --config %s [--dry-run] [--group-hook]
+  gitgram preview     --config %s [--scenario all] [--delay 4s] [--db path]
   gitgram healthcheck [--url http://127.0.0.1:8080/healthz]
   gitgram version
-`, ops.Version, defaultConfigPath, defaultConfigPath)
+`, ops.Version, defaultConfigPath, defaultConfigPath, defaultConfigPath)
 }

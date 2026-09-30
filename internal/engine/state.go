@@ -15,6 +15,7 @@ import (
 const (
 	relHeadPipeline = "head_pipeline" // mr → pipeline
 	relChild        = "child"         // parent pipeline → child pipeline
+	relPushPipeline = "pipeline"      // push → pipeline for its (branch, sha)
 )
 
 func skey(k cards.Key) store.Key {
@@ -41,6 +42,11 @@ func load[T any](ctx context.Context, tx *store.Tx, key cards.Key, log *slog.Log
 		}
 	}
 	return st, row, nil
+}
+
+// unmarshalState decodes a stored row into st.
+func unmarshalState(row store.ObjectRow, st any) error {
+	return json.Unmarshal(row.StateJSON, st)
 }
 
 // put persists st as the state behind key.

@@ -1,6 +1,6 @@
 telegram:
   token: ${GITGRAM_TELEGRAM_TOKEN}
-  chat_id: -1001234567890
+  chat_id: -1001234567890             # or several: -1001234567890, -1009876543210 (the first gets the forum topics)
   mode: webhook                 # webhook | polling
   webhook_secret: ${GITGRAM_TG_WEBHOOK_SECRET:-}   # required in webhook mode; unused with --poll
   threads:                      # forum topic ids; omit → General
@@ -16,7 +16,7 @@ gitlab:
   base_url: https://gitlab.com
   group: my-org                 # top-level group; all projects under it (subgroups included) are accepted
   read_token: ${GITGRAM_GITLAB_TOKEN:-}       # optional, read_api; enables approvals, thread counts, force-push detection, reconciler
-  hooks_token: ${GITGRAM_GITLAB_HOOKS_TOKEN:-} # optional, api scope; only used by `gitgram sync-hooks`
+  hooks_token: ${GITGRAM_GITLAB_HOOKS_TOKEN:-} # optional, api scope; `gitgram sync-hooks` and the card operations (stop, retry, play, run)
   webhook_secret: ${GITGRAM_WEBHOOK_SECRET}
 storage: { path: /data/gitgram.db }
 logging: { level: info, format: text }
@@ -24,7 +24,7 @@ defaults:
   events: [push, tag, pipeline, mr, mr_note, issue, issue_note, release, deployment]
   verbosity: normal
   branches: { allow: ["*"], deny: ["renovate/*"] }
-  pipelines: { child_cards: inline, quiet_success: true }
+  pipelines: { child_cards: inline, quiet_success: true, log_tail: { lines: 10, live_lines: 10, interval: 15s } }
   mr: { collapse_notes: false, show_description: true, show_system_notes: false }
   push: { max_commits: 10 }
 projects:                       # optional per-project overrides, matched by path
