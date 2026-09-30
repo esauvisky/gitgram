@@ -1,10 +1,10 @@
 services:
   gitgram:
-    build:
+    image: ghcr.io/esauvisky/gitgram:${VERSION:-latest}
+    build:                      # only used by `docker compose up --build`; otherwise the image is pulled
       context: .
       args:
         VERSION: ${VERSION:-dev}
-    image: gitgram:${VERSION:-dev}
     restart: unless-stopped
     read_only: true
     environment:

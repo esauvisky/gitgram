@@ -47,8 +47,13 @@ One token with `api` covers both. A group access token works too.
 
 ### 3. Run
 
+Prebuilt multi-arch images (amd64, arm64) live at `ghcr.io/esauvisky/gitgram`. No clone needed:
+
 ```sh
-cp config.example.yaml config.yaml          # edit chat_id, group, threads, users
+mkdir gitgram && cd gitgram
+curl -fsSLO https://raw.githubusercontent.com/esauvisky/gitgram/main/docker-compose.yml
+curl -fsSL  https://raw.githubusercontent.com/esauvisky/gitgram/main/config.example.yaml -o config.yaml
+# edit config.yaml: chat_id, group, threads, users
 cat > .env <<EOF
 GITGRAM_TELEGRAM_TOKEN=...
 GITGRAM_TG_WEBHOOK_SECRET=$(openssl rand -hex 24)
@@ -56,14 +61,14 @@ GITGRAM_WEBHOOK_SECRET=$(openssl rand -hex 24)
 GITGRAM_GITLAB_TOKEN=...
 GITGRAM_GITLAB_HOOKS_TOKEN=...
 EOF
-docker compose up -d --build
+docker compose up -d
 docker compose exec gitgram /gitgram sync-hooks --config /config/config.yaml --dry-run
 docker compose exec gitgram /gitgram sync-hooks --config /config/config.yaml
 ```
 
 Put a TLS-terminating reverse proxy in front of `127.0.0.1:8080` and set `server.public_base_url` to whatever GitLab can reach. In `telegram.mode: polling` Telegram needs no public URL at all; GitLab still does.
 
-Without Docker: `go run ./cmd/gitgram serve --config config.yaml --poll`, and set `storage.path` to somewhere writable.
+Pin a version with `VERSION=0.1.0 docker compose up -d`. To build locally instead of pulling: clone the repo and `docker compose up -d --build`. Without Docker: `go run ./cmd/gitgram serve --config config.yaml --poll`, and set `storage.path` to somewhere writable.
 
 ## Configuration
 

@@ -10,6 +10,9 @@ RUN CGO_ENABLED=0 go build -trimpath \
     && mkdir -p /data /config
 
 FROM gcr.io/distroless/static-debian12:nonroot
+LABEL org.opencontainers.image.source="https://github.com/esauvisky/gitgram" \
+      org.opencontainers.image.description="GitLab webhooks → Telegram cards that edit themselves" \
+      org.opencontainers.image.licenses="MIT"
 COPY --from=build /gitgram /gitgram
 COPY --from=build --chown=nonroot:nonroot /data /data
 COPY --from=build --chown=nonroot:nonroot /config /config
