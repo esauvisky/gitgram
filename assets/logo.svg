@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e2130"/>
+      <stop offset="1" stop-color="#0f1117"/>
+    </linearGradient>
+    <linearGradient id="plane" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#fc6d26"/>
+      <stop offset="0.55" stop-color="#e24329"/>
+      <stop offset="1" stop-color="#2aabee"/>
+    </linearGradient>
+    <linearGradient id="trail" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fc6d26" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#fc6d26"/>
+    </linearGradient>
+    <linearGradient id="branch" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2aabee" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#2aabee"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- main branch: the trail the plane leaves behind -->
+  <path d="M 64 352 H 250" stroke="url(#trail)" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <!-- feature branch merging into main -->
+  <path d="M 96 424 H 176 Q 208 424 224 392 L 244 358" stroke="url(#branch)" stroke-width="14" stroke-linecap="round" fill="none"/>
+
+  <!-- commits on main -->
+  <circle cx="112" cy="352" r="16" fill="#0f1117" stroke="#fc6d26" stroke-width="10"/>
+  <circle cx="186" cy="352" r="16" fill="#0f1117" stroke="#fc6d26" stroke-width="10"/>
+  <!-- commit on branch -->
+  <circle cx="148" cy="424" r="16" fill="#0f1117" stroke="#2aabee" stroke-width="10"/>
+
+  <!-- paper plane, launched from the merge commit -->
+  <g transform="translate(262 348) rotate(-34) scale(1.35)">
+    <path d="M 0 0 L 196 -34 L 56 46 Z" fill="url(#plane)"/>
+    <path d="M 0 0 L 56 46 L 62 92 L 86 58 L 196 -34 Z" fill="#ffffff" opacity="0.92"/>
+    <path d="M 56 46 L 196 -34 L 86 58 Z" fill="#c9d3e6"/>
+    <path d="M 56 46 L 62 92 L 86 58 Z" fill="#8fa3c4"/>
+  </g>
+
+  <!-- the merge commit itself: where GitLab ends and Telegram begins -->
+  <circle cx="262" cy="348" r="20" fill="#0f1117" stroke="url(#plane)" stroke-width="12"/>
+</svg>
