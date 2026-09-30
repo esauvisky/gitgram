@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -77,10 +79,11 @@ func (q queries) OutboxHead(ctx context.Context) (*OutboxRow, error) {
 	var threadID, cardProjectID, cardObjectID sql.NullInt64
 	var cardKind, lastError sql.NullString
 	var notBefore int64
+	var sent string
 	err := q.db.QueryRowContext(ctx,
-		`SELECT id, thread_id, op, card_kind, card_project_id, card_object_id, payload, not_before, attempts, last_error, generation
+		`SELECT id, thread_id, op, card_kind, card_project_id, card_object_id, payload, not_before, attempts, last_error, generation, sent_chats
 		 FROM outbox ORDER BY id LIMIT 1`,
-	).Scan(&r.ID, &threadID, &r.Op, &cardKind, &cardProjectID, &cardObjectID, &r.Payload, &notBefore, &r.Attempts, &lastError, &r.Generation)
+	).Scan(&r.ID, &threadID, &r.Op, &cardKind, &cardProjectID, &cardObjectID, &r.Payload, &notBefore, &r.Attempts, &lastError, &r.Generation, &sent)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -95,7 +98,24 @@ func (q queries) OutboxHead(ctx context.Context) (*OutboxRow, error) {
 	}
 	r.NotBefore = time.UnixMilli(notBefore)
 	r.LastError = lastError.String
+	for _, part := range strings.Split(sent, ",") {
+		if id, err := strconv.ParseInt(part, 10, 64); err == nil {
+			r.SentChats = append(r.SentChats, id)
+		}
+	}
 	return &r, nil
+}
+
+// MarkOutboxSent records that a send or reply row was delivered to (or
+// given up on in) chatID, so a retry of the row skips that chat.
+func (q queries) MarkOutboxSent(ctx context.Context, id, chatID int64) error {
+	_, err := q.db.ExecContext(ctx,
+		`UPDATE outbox SET sent_chats = CASE sent_chats WHEN '' THEN ? ELSE sent_chats || ',' || ? END WHERE id = ?`,
+		strconv.FormatInt(chatID, 10), strconv.FormatInt(chatID, 10), id)
+	if err != nil {
+		return fmt.Errorf("mark outbox %d sent to %d: %w", id, chatID, err)
+	}
+	return nil
 }
 
 // DeferOutbox reschedules a row after a failed or rate-limited attempt.

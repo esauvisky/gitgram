@@ -64,6 +64,8 @@ type OutboxRow struct {
 	// Generation counts coalesced card enqueues that hit this row; a delete
 	// must name the generation that was read.
 	Generation int64
+	// SentChats lists the chats a send or reply row already reached.
+	SentChats []int64
 }
 
 // Link is a directed, labelled edge between two objects

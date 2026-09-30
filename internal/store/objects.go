@@ -66,6 +66,19 @@ func (q queries) ListNonFinal(ctx context.Context, kind string, olderThan time.T
 	return out, nil
 }
 
+// ExpireNonFinal marks non-final objects of kind whose last event precedes
+// olderThan as final, so Prune can retire them later. It returns the
+// number of rows changed.
+func (q queries) ExpireNonFinal(ctx context.Context, kind string, olderThan time.Time) (int64, error) {
+	res, err := q.db.ExecContext(ctx,
+		`UPDATE object_state SET final = 1, updated_at = ? WHERE kind = ? AND final = 0 AND last_event_at < ?`,
+		time.Now().Unix(), kind, olderThan.Unix())
+	if err != nil {
+		return 0, fmt.Errorf("expire non-final %q: %w", kind, err)
+	}
+	return res.RowsAffected()
+}
+
 type scanner interface {
 	Scan(dest ...any) error
 }
