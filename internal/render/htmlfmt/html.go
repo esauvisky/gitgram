@@ -26,6 +26,18 @@ func B(text string) string { return "<b>" + Esc(text) + "</b>" }
 // I renders italic text.
 func I(text string) string { return "<i>" + Esc(text) + "</i>" }
 
+// Pre renders text as a code block; lang, when set, is the syntax
+// highlighting hint clients honour (<code class="language-lang">).
+func Pre(text, lang string) string {
+	if lang == "" {
+		return "<pre>" + Esc(text) + "</pre>"
+	}
+	return `<pre><code class="language-` + Esc(lang) + `">` + Esc(text) + "</code></pre>"
+}
+
+// S wraps escaped text in strikethrough.
+func S(text string) string { return "<s>" + Esc(text) + "</s>" }
+
 // Code renders inline code.
 func Code(text string) string { return "<code>" + Esc(text) + "</code>" }
 
@@ -88,6 +100,33 @@ func Dur(seconds float64) string {
 		return strconv.FormatInt(m, 10) + "m" + pad2(sec) + "s"
 	}
 	return strconv.FormatInt(sec, 10) + "s"
+}
+
+// Clock formats a duration in seconds as m:ss or h:mm:ss, the way the
+// cards show stage times.
+func Clock(seconds float64) string {
+	if seconds < 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) {
+		seconds = 0
+	}
+	s := int64(math.Round(seconds))
+	h, m, sec := s/3600, s%3600/60, s%60
+	if h > 0 {
+		return strconv.FormatInt(h, 10) + ":" + pad2(m) + ":" + pad2(sec)
+	}
+	return strconv.FormatInt(m, 10) + ":" + pad2(sec)
+}
+
+// Size formats bytes as B, KB, MB or GB with one decimal above KB.
+func Size(b int64) string {
+	switch {
+	case b >= 1<<30:
+		return strconv.FormatFloat(float64(b)/(1<<30), 'f', 1, 64) + " GB"
+	case b >= 1<<20:
+		return strconv.FormatFloat(float64(b)/(1<<20), 'f', 1, 64) + " MB"
+	case b >= 1<<10:
+		return strconv.FormatInt(b>>10, 10) + " KB"
+	}
+	return strconv.FormatInt(b, 10) + " B"
 }
 
 func pad2(n int64) string {
