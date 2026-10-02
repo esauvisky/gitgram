@@ -15,29 +15,20 @@ const noteSnippetLen = 120
 // maxLabels caps the labels listed on a card; the rest are counted.
 const maxLabels = 8
 
-// MergeRequest renders a merge request card in the family's cadence: who
-// opened, merged or closed it in which project, a heading with the state
-// and the branches, the title and author in small text, one small line
-// per fact (pipeline, conflicts, threads, approvals while open), the
-// description, the diff stats and the comments folded, the people in
-// small text, and a footer with the last change and update.
+// MergeRequest renders a merge request card: the title (`@ada opened MR
+// !42 in demo (feat/x → develop)`, fixed once posted), the MR title in
+// small text, who merged or closed it, the diff stats, one small line per
+// fact (pipeline, conflicts, threads, approvals while open), the
+// description and the comments as folds, and small lines for the people
+// and the last change.
 func MergeRequest(s *cards.MRState, o Options) Message {
-	var d htmlfmt.Doc
-	actor, verb := s.Author, "opened a merge request in"
-	switch s.State {
-	case event.MRStateMerged:
-		verb = "merged a merge request in"
-		if s.MergedBy != nil && !s.MergedBy.IsZero() {
-			actor = *s.MergedBy
-		}
-	case event.MRStateClosed:
-		verb = "closed a merge request in"
-		if s.LastChange.Kind == cards.ChangeClosed && !s.LastChange.By.IsZero() {
-			actor = s.LastChange.By
-		}
+	var b htmlfmt.Builder
+	kind := " opened MR "
+	if s.Draft {
+		kind = " opened draft MR "
 	}
-	o.lead(&d, actor, verb, s.Project)
-	d.Block(htmlfmt.Heading(mrLamp(s)+" MR "+anchorText("!", s.IID, s.URL)+" "+mrHeadline(s), 6))
+	headline(&b, o.who(s.Author)+kind+anchorText("!", s.IID, s.URL), "in", s.Project,
+		branchRef(s.Project, s.SourceBranch)+" → "+branchRef(s.Project, s.TargetBranch))
 
 	title := htmlfmt.Esc(clip(s.Title, maxTitleLen))
 	if s.URL != "" {
@@ -46,22 +37,35 @@ func MergeRequest(s *cards.MRState, o Options) Message {
 	if s.State == event.MRStateClosed {
 		title = "<s>" + title + "</s>"
 	}
-	if !s.Author.IsZero() {
-		title += " • " + o.user(s.Author)
+	small(&b, title)
+	switch s.State {
+	case event.MRStateMerged:
+		l := "Merged"
+		if s.MergedBy != nil && !s.MergedBy.IsZero() {
+			l += " by " + o.user(*s.MergedBy)
+		}
+		small(&b, l+" into "+htmlfmt.Code(s.TargetBranch))
+	case event.MRStateClosed:
+		l := "Closed"
+		if s.LastChange.Kind == cards.ChangeClosed && !s.LastChange.By.IsZero() {
+			l += " by " + o.user(s.LastChange.By)
+		}
+		small(&b, l)
 	}
-	d.Block(htmlfmt.Footer(title))
-
+	if d := diffSummary(s.Diff); d != "" {
+		small(&b, d)
+	}
 	if p := s.HeadPipeline; p != nil {
-		d.Block(htmlfmt.Footer(pipelineLine(p)))
+		small(&b, pipelineLine(p))
 	}
 	if s.DetailedMergeStatus == "conflict" {
-		d.Block(htmlfmt.Footer(EmojiConflict + " Conflicts with " + htmlfmt.Code(s.TargetBranch)))
+		small(&b, "Conflicts with "+htmlfmt.Code(s.TargetBranch))
 	}
 	if s.Threads.Enriched {
 		if s.Threads.Unresolved > 0 {
-			d.Block(htmlfmt.Footer(EmojiNote + " " + plural(s.Threads.Unresolved, "unresolved thread")))
+			small(&b, plural(s.Threads.Unresolved, "unresolved thread"))
 		} else {
-			d.Block(htmlfmt.Footer(EmojiNote + " Discussions resolved"))
+			small(&b, "Discussions resolved")
 		}
 	}
 	approvals := ""
@@ -70,27 +74,23 @@ func MergeRequest(s *cards.MRState, o Options) Message {
 		if s.Approvals.Enriched && s.Approvals.Required > 0 {
 			approvals += "/" + strconv.Itoa(s.Approvals.Required)
 		}
-		if n > 0 {
+		if n > 0 && s.State == event.MRStateOpened {
 			approvals += " · " + o.users(s.Approvals.By)
 		}
 	}
 	if approvals != "" && s.State == event.MRStateOpened {
-		d.Block(htmlfmt.Footer(approvals))
+		small(&b, approvals)
 	}
 
 	if desc := strings.TrimSpace(s.Description); o.ShowDescription && desc != "" {
-		quote := htmlfmt.Blockquote(strings.ReplaceAll(htmlfmt.RewriteMentions(htmlfmt.Esc(desc), o.Mentions), "\n", "<br/>"), false)
-		d.Block(htmlfmt.Details("Description", quote, false))
-	}
-	if s.Diff != nil {
-		d.Block(diffBlock(s.Diff))
+		fold(&b, "Description", htmlfmt.RewriteMentions(htmlfmt.Esc(desc)))
 	}
 	if len(s.Notes) > 0 {
 		noteLines := make([]string, len(s.Notes))
 		for i, n := range s.Notes {
 			noteLines[i] = noteLine(n, o)
 		}
-		d.Block(htmlfmt.Details(plural(len(s.Notes), "comment"), "<p>"+strings.Join(noteLines, "<br/>")+"</p>", false))
+		fold(&b, plural(len(s.Notes), "comment"), strings.Join(noteLines, "\n"))
 	}
 
 	var people []string
@@ -121,49 +121,22 @@ func MergeRequest(s *cards.MRState, o Options) Message {
 		}
 		people = append(people, l)
 	}
-	if len(people) > 0 {
-		d.Block(htmlfmt.Footer(strings.Join(people, " · ")))
-	}
-	var footer []string
-	if f := changeFooter(s.LastChange, o); f != "" {
-		footer = append(footer, f)
-	}
-	if u := o.updated(s.LastEventAt); u != "" {
-		footer = append(footer, u)
-	}
-	if len(footer) > 0 {
-		d.Block(htmlfmt.Footer(strings.Join(footer, " · ")))
-	}
-	taglineFooter(&d, "mr:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.IID, 10))
-	return Message{Rich: d.String()}
-}
-
-// mrHeadline is the state and branches after the anchor: `opened:
-// <src> → <tgt>` (`draft:` for drafts), `merged into <tgt>`, `closed`.
-func mrHeadline(s *cards.MRState) string {
-	branches := htmlfmt.Code(s.SourceBranch) + " → " + htmlfmt.Code(s.TargetBranch)
-	switch s.State {
-	case event.MRStateMerged:
-		return "merged into " + htmlfmt.Code(s.TargetBranch)
-	case event.MRStateClosed:
-		return "closed"
-	}
-	if s.Draft {
-		return "draft: " + branches
-	}
-	return "opened: " + branches
+	small(&b, strings.Join(people, " · "))
+	small(&b, changeFooter(s.LastChange, o))
+	taglineFooter(&b, "mr:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.IID, 10))
+	return Message{HTML: b.Truncate(o.limit(), s.URL)}
 }
 
 // pipelineLine is the pipeline fact line shared by MR and push cards:
-// `lamp Pipeline #n word [· N failed] [· N manual]`.
+// `Pipeline #n word [· N failed] [· N manual]`.
 func pipelineLine(p *cards.PipelineSummary) string {
 	num := p.IID
 	if num == 0 {
 		num = p.ID
 	}
-	l := statusEmoji(p.Status, false) + " Pipeline " + anchorText("#", num, p.URL) + " " + strings.ToLower(statusWord(p.Status, false))
+	l := "Pipeline " + anchorText("#", num, p.URL) + " " + strings.ToLower(statusWord(p.Status, false))
 	if event.IsActive(p.Status) && p.Status != event.StatusRunning {
-		l = EmojiPending + " Pipeline " + anchorText("#", num, p.URL) + " queued"
+		l = "Pipeline " + anchorText("#", num, p.URL) + " queued"
 	}
 	if p.Failed > 0 && p.Status != event.StatusFailed {
 		l += " · " + strconv.Itoa(p.Failed) + " failed"
@@ -172,15 +145,6 @@ func pipelineLine(p *cards.PipelineSummary) string {
 		l += " · " + strconv.Itoa(p.Manual) + " manual"
 	}
 	return l
-}
-
-// mrLamp is the state emoji; a draft shows the draft lamp instead of the
-// open one.
-func mrLamp(s *cards.MRState) string {
-	if s.Draft && s.State == event.MRStateOpened {
-		return EmojiMRDraft
-	}
-	return mrStateEmoji(s.State)
 }
 
 func sameUser(a, b event.User) bool {
@@ -207,7 +171,7 @@ func noteLine(n cards.NoteSummary, o Options) string {
 	if r := []rune(body); len(r) > noteSnippetLen {
 		body = string(r[:noteSnippetLen]) + "…"
 	}
-	l := htmlfmt.B(displayName(n.Author)) + ": "
+	l := o.user(n.Author) + ": "
 	if n.IsDiff && n.FilePath != "" {
 		l += htmlfmt.Code(fileRef(n.FilePath, n.Line)) + " "
 	}

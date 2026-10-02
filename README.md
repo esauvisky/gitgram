@@ -17,15 +17,15 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 ## What you get
 
 - **Pipeline cards**: pending → running → done, edited in place. Stage rows, job names, failed jobs with log links, durations, "waiting for manual job" states, child pipelines folded into the parent. Retries don't spawn a new card, they update the old one.
-- **Log tails**: one collapsible block with the last 10 lines of the failed job's log (open) or the running job's log (closed, refreshed every 15 s), syntax-coloured. Passed jobs leave no trace. Needs `gitlab.read_token`.
+- **Failure logs**: when a job fails, the last 10 lines of its log appear under its stage, syntax-coloured. Running and passed jobs show no log, just the stage line and, once finished, how long it took. Needs `gitlab.read_token`.
 - **Artifacts**: every archive the jobs produced, linked with its size, once the pipeline ends.
-- **Rich messages**: cards use Telegram's rich message format (Bot API 10.1+): a small lead line (`@ada ran a pipeline in agent`), a heading with the outcome and ref (`Pipeline #5981 failed on feat/x`), a three-column table of stages, jobs and clock times, one collapsible log (open on failure, closed while running), and small footer lines for the commit, the artifacts and the last update. Clients older than June 2026 cannot render them.
-- **One button**: `Cancel`, shown only while a pipeline is active and gone with the edit that shows the outcome. Needs `gitlab.hooks_token`; anyone in the group may press. Everything else is a link in the text.
+- **One layout for every card**, in plain Telegram HTML that any client renders: a title that never changes once posted, `@someone did this in repo (branch)` (`@ada pushed to agent (feat/x)`, `@emi ran pipeline #84 in agent (main)`), italic detail lines, one line per pipeline stage (`✅ Build · 1:02`, `🏃 Deploy: running job x...`, `❌ Test: unit failed · 1:40` with the failed log under it), and expandable quotes for commits, descriptions and comments. Emoji only as stage marks.
+- **Stop and Retry**: a running pipeline carries `Stop pipeline`, which asks `Yes, stop it` / `Keep running` before canceling; a failed one carries `Retry`, no questions asked. Needs `gitlab.hooks_token`; anyone in the group may press. Everything else is a link in the text.
 - **Merge request cards**: state, draft flag, assignees, reviewers, labels, approvals (N/M when the API allows it), unresolved thread count, head pipeline status, conflicts, and a merged/closed footer. Comments reply to the card; or fold them in with `collapse_notes` if your team comments like it's paid by the word.
 - **Issue cards** with replying comments.
-- **Push cards**: one small line (`↗︎ 7 commits pushed: feat/x • by @ada`), the commits in one quote, `N files changed · +A −D` folded over a `git diff --stat` block with per-file counts (via the API), and the pipeline for that push as it moves from queued to passed or failed, all edited in place. A newer push to the same branch gets its own card and marks the old one superseded. Branch created and deleted, and a force-push badge (detected via the API, because GitLab doesn't tell you).
+- **Push cards**: `@ada pushed to agent (feat/x)`, the commits in one quote, the diff stats in italics as the first line of the commits quote (`3 changed, 1 deleted • +42 −18`), and the pipeline for that push as it moves from queued to passed or failed, all edited in place. A newer push to the same branch gets its own card and marks the old one superseded. Branch created and deleted, and a force-push badge (detected via the API, because GitLab doesn't tell you).
 - **Tags, releases, deployments** as plain messages with links.
-- **Mentions**: `@gitlab-user` in a comment becomes a real Telegram mention through the `users` map.
+- **Handles, not pings**: people show as italic `@gitlab-user`, including `@mentions` inside descriptions and comments. Nothing links to a Telegram account, so a card never notifies anyone.
 - **Forum topics**: route pipelines, MRs and pushes to their own topics.
 - **Reconciler**: cards that stopped receiving events get re-read from the GitLab API. GitLab does not retry failed webhook deliveries, ever, so somebody has to.
 - **`sync-hooks`**: registers the webhook on every project in the group, or one group hook if you pay for Premium.
@@ -36,7 +36,7 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 ### 1. Telegram
 
 1. `/newbot` at [@BotFather](https://t.me/BotFather), keep the token.
-2. Add the bot to your group and make it an admin (reactions only reach admin bots, and topics need it too).
+2. Add the bot to your group and make it an admin (forum topics need it).
 3. Get the chat id (`-100…`): forward a group message to [@getidsbot](https://t.me/getidsbot), or open the group in [web.telegram.org](https://web.telegram.org/a/) and read the URL fragment. Topic ids are the number after `_` in a topic's URL. The General topic needs no id.
 
 ### 2. GitLab
@@ -85,7 +85,6 @@ Pin a version with `VERSION=0.1.0 docker compose up -d`. To build locally instea
 | `telegram.mode` | `webhook` | `webhook` or `polling` |
 | `telegram.webhook_secret` | required in webhook mode | URL suffix and `secret_token` for Telegram updates |
 | `telegram.threads` | | `<event class>: <topic id>`, plus `default` |
-| `telegram.reactions` | `{stop: 👎, run: 🔥, play: 🫡}` | which reaction triggers which operation; must be Telegram reaction emoji |
 | `server.listen` | `:8080` | listen address |
 | `server.public_base_url` | required for webhook mode and sync-hooks | external base URL |
 | `server.gitlab_webhook_path` | `/webhook/gitlab` | GitLab delivery path |
@@ -102,9 +101,7 @@ Pin a version with `VERSION=0.1.0 docker compose up -d`. To build locally instea
 | `defaults.branches.allow` / `.deny` | `["*"]` / `[]` | globs (`release/*`) or `re:` regexps; deny wins |
 | `defaults.pipelines.child_cards` | `inline` | `inline` (in parent card), `own`, `both` |
 | `defaults.pipelines.quiet_success` | `true` | with `quiet`: stay silent on success |
-| `defaults.pipelines.log_tail.lines` | `10` | log lines kept for each failed job; `0` disables tails |
-| `defaults.pipelines.log_tail.live_lines` | `10` | log lines shown for each stage's running job |
-| `defaults.pipelines.log_tail.interval` | `15s` | how often the running job's tail is refreshed (min `5s`); the loop ticks at the `defaults` value |
+| `defaults.pipelines.log_tail.lines` | `10` | log lines shown for a failed job; `0` disables them |
 | `defaults.mr.collapse_notes` | `false` | fold comments into the MR card instead of replying |
 | `defaults.mr.show_description` | `true` | description as an expandable quote |
 | `defaults.mr.show_system_notes` | `false` | relay GitLab system notes |
@@ -132,7 +129,7 @@ Endpoint: `POST <public_base_url>/webhook/gitlab`. Events to enable: Push, Tag p
 
 ## Preview
 
-`gitgram preview --config config.yaml` sends a mock card of every kind and scenario to the configured chat: pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, a passing and a manual pipeline, a merge request opened → approved → merged with a reply, a draft closed, an issue, a tag, a release and a deployment. Cards go through the real engine and sender, so first sends, in-place edits, folding and reactions behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview --config /config/config.yaml`. Pick scenarios with `--scenario pipeline,mr` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview pipeline mr`.
+`gitgram preview --config config.yaml` sends a mock card of every kind and scenario to the configured chat: pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, a passing and a manual pipeline, a merge request opened → approved → merged with a reply, a draft closed, an issue, a tag, a release and a deployment. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview --config /config/config.yaml`. Pick scenarios with `--scenario pipeline,mr` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview pipeline mr`.
 
 ## Operations
 

@@ -1,50 +1,48 @@
 package render
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/esauvisky/gitgram/internal/event"
 	"github.com/esauvisky/gitgram/internal/render/htmlfmt"
 )
 
-// Release renders a release created, updated or deleted.
+// Release renders a release created, updated or deleted: the headline
+// (release payloads name no person), the commit in small text, the notes
+// as a fold, and the asset links.
 func Release(r *event.Release, o Options) Message {
 	var b htmlfmt.Builder
 	name := r.Name
 	if name == "" {
 		name = r.Tag
 	}
-	title := htmlfmt.B("Release "+name) + " (" + htmlfmt.Code(r.Tag) + ")"
-	project := htmlfmt.A(r.Project.Path, r.Project.WebURL)
+	title := htmlfmt.Esc(name)
+	if r.URL != "" {
+		title = htmlfmt.A(name, r.URL)
+	}
 	switch r.Action {
 	case event.ReleaseActionDelete:
-		b.Line(EmojiDeletedBranch + " " + title + " deleted in " + project)
-		return Message{HTML: b.Truncate(o.limit(), r.Project.WebURL+"/-/releases")}
+		headline(&b, "Release "+htmlfmt.Esc(name)+" was deleted", "in", r.Project, tagRef(r.Project, r.Tag))
+		return Message{HTML: b.String()}
 	case event.ReleaseActionUpdate:
-		b.Line(EmojiRelease + " " + title + " updated in " + project)
+		headline(&b, "Release "+title+" was updated", "in", r.Project, tagRef(r.Project, r.Tag))
 	default:
-		b.Line(EmojiRelease + " " + title + " in " + project)
+		headline(&b, "Release "+title+" was published", "in", r.Project, tagRef(r.Project, r.Tag))
 	}
 	if r.Commit.SHA != "" {
-		sha := htmlfmt.ShortSHA(r.Commit.SHA)
-		l := htmlfmt.Code(sha)
-		if r.Commit.URL != "" {
-			l = htmlfmt.A(sha, r.Commit.URL)
-		}
-		if r.Commit.Title != "" {
-			l += " " + htmlfmt.Esc(r.Commit.Title)
-		}
-		b.Line(l)
+		small(&b, commitLine(r.Commit, r.Commit.Author.Name))
 	}
 	if desc := strings.TrimSpace(r.Description); desc != "" {
-		b.Quote(htmlfmt.RewriteMentions(htmlfmt.Esc(desc), o.Mentions), true)
+		fold(&b, "Release notes", htmlfmt.RewriteMentions(htmlfmt.Esc(desc)))
 	}
 	if len(r.Links) > 0 {
 		parts := make([]string, len(r.Links))
 		for i, l := range r.Links {
 			parts[i] = htmlfmt.A(l.Name, l.URL)
 		}
-		b.Line(EmojiLink + " " + strings.Join(parts, " · "))
+		small(&b, "Assets: "+strings.Join(parts, " · "))
 	}
+	taglineFooter(&b, "release:"+strconv.FormatInt(r.Project.ID, 10)+":"+r.Tag)
 	return Message{HTML: b.Truncate(o.limit(), r.URL)}
 }

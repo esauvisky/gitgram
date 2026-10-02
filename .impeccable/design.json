@@ -1,478 +1,179 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-30T23:30:00Z",
+  "generatedAt": "2026-09-30T00:00:00Z",
   "title": "Design System: Gitgram",
   "extensions": {
     "typographyMeta": {
-      "project": {
-        "displayName": "Project line (footer)",
-        "purpose": "Block one of every rich card: the project path below Options.Group, directories plain, ` / ` between segments, the project name linked."
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The fixed title: who did what in|to which project (ref); never edited after posting."
       },
-      "status": {
-        "displayName": "Status line (bold)",
-        "purpose": "The one bold line: lamp, then <b>Pipeline #n · phrase</b> / <b>MR !n · State</b> / <b>N commits pushed</b>. The phrase names the stage that failed or is running in the stage's own case; sentence() capitalises only the first letter."
+      "handle": {
+        "displayName": "Handle",
+        "purpose": "@⁠username with a word joiner; bold in the headline, italic elsewhere, never a link."
       },
-      "title": {
-        "displayName": "Title (plain p)",
-        "purpose": "The commit title on a pipeline (omitted when empty) or the MR title; clipped at 72 runes; <s> when the MR is closed. A push has no title."
-      },
-      "ref": {
-        "displayName": "Ref chip (code)",
-        "purpose": "One <code> run: the branch or tag, or `source → target` on an MR; plain anchors beside it (` · MR !42`, ` · ↰ child of #9`) on a pipeline. Also file names, diff positions, and the 7-character SHA chip nested inside its link (shaChip)."
-      },
-      "person": {
-        "displayName": "Person line (footer)",
-        "purpose": "`Opened by <who>` under the MR ref chip; the pusher's name alone under the push branch. A mapped user is a tg://user mention."
+      "small": {
+        "displayName": "Small (italic)",
+        "purpose": "Object title, outcome, diff stats, facts, people, meta, artifacts, assets, tagline."
       },
       "stage": {
-        "displayName": "Stage name (bold td)",
-        "purpose": "Stage name through sentence() after its aggregated lamp on the stage row; never linked. The jobs row beneath is plain inline text with linked job names; table cells take inline text only."
+        "displayName": "Stage line",
+        "purpose": "Text mark, bold linked stage name, state in words, finish time; carries the pipeline result."
       },
-      "clock": {
-        "displayName": "Clock (right-aligned td)",
-        "purpose": "htmlfmt.Clock m:ss / h:mm:ss on the stage row; `—` for a skipped or canceled stage; empty until something finished."
+      "fold-label": {
+        "displayName": "Fold label (bold)",
+        "purpose": "First line inside an expandable quote."
       },
-      "body": {
-        "displayName": "Body (p with br lines)",
-        "purpose": "MR fact lines (merged/closed, pipeline, conflicts, discussions, approvals while open), the push pipeline line, the plain frozen line, the downstream line, the quiet summary, the paragraphs inside a fold."
+      "chip": {
+        "displayName": "Chip (code)",
+        "purpose": "Branches, tags, job names, conflict targets, path:line."
       },
-      "live": {
-        "displayName": "Live (italic)",
-        "purpose": "The running job on the jobs line. Nothing else is italic."
-      },
-      "struck": {
-        "displayName": "Struck (s)",
-        "purpose": "Skipped and canceled jobs, a closed MR's title, a deleted branch, a deleted file in the diff fold."
-      },
-      "summary": {
-        "displayName": "Summary (details)",
-        "purpose": "A label, counted when it can be: `Error · last lines`, `Logs · current stage`, `View changes and description`, `3 files changed · +42 −18`, `1 comment`, `Jobs`."
-      },
-      "log": {
-        "displayName": "Log (pre, language-log)",
-        "purpose": "The last lines of one job, only inside the one log fold; ANSI-stripped, capped by pipelines.log_tail."
-      },
-      "meta": {
-        "displayName": "Meta footer",
-        "purpose": "Closing small print ending in `Updated HH:MM`; pipelines also `who · commit <a><code>8f6ded0</code></a> · 📦 Artifacts: job size`; MR change fragments (`approved by X`)."
+      "block": {
+        "displayName": "Block (pre code)",
+        "purpose": "A failed job's log tail as language-log, never inside a quote."
       },
       "button": {
-        "displayName": "Button (inline keyboard)",
-        "purpose": "Capitalised verb; ` ↗︎` (U+2197 U+FE0E) suffix on URL buttons, bare on callbacks; two per row."
+        "displayName": "Button",
+        "purpose": "Stop pipeline, Yes, stop it / Keep running, Retry: plain words, pipeline-bearing cards only."
       }
     },
-    "grammar": {
-      "separator": " · ",
-      "pathSeparator": " / ",
-      "arrow": " → ",
-      "medium": "Telegram rich message HTML (Bot API 10.1+): footer, p, b, i, s, code, a, table compact with td align=right (cells take inline text only), details/summary (open or closed), pre with <code class=\"language-log\">, blockquote expandable. Built by htmlfmt.Doc block by block; Message.Keyboard is a normal inline keyboard. No h4, mark, ul, tg-button, reactions. Classic Bot API HTML (htmlfmt.Builder, 4096 minus 200 margin, `… read more`) remains for the pending inheritors.",
-      "limit": {
-        "richLimit": 30000,
-        "truncation": "whole blocks dropped from the end until the joined blocks fit; the first block is never dropped"
-      },
-      "head": [
-        "footer project",
-        "p lamp <b>status</b>",
-        "p title (pipeline, MR)",
-        "p <code>ref</code> chip",
-        "footer person (MR, push)"
-      ],
-      "titleMaxRunes": 72,
-      "blockOrder": {
-        "pipeline": [
-          "footer project",
-          "p status",
-          "p commit title",
-          "p ref · MR !n · ↰ child of #id",
-          "table compact stages (quiet: p summary; verbose: + details Jobs)",
-          "p ↳ Downstream",
-          "p ⏸️ Waiting for manual (quiet only)",
-          "details log (open Error · last lines | closed Logs · current stage)",
-          "footer who · commit <a><code>sha7</code></a> · 📦 Artifacts · Updated HH:MM"
-        ],
-        "mr": [
-          "footer project",
-          "p status",
-          "p title (s when closed)",
-          "p <code>src → tgt</code>",
-          "footer Opened by who",
-          "blockquote expandable description first line (200 runes)",
-          "p mock lines (merged/closed, pipeline, conflicts, 💬 discussions, Approvals while open)",
-          "details View changes and description (p full description; p N files changed · +A −D + file chips; p Approvals (merged/closed) · Reviewers (approved) · Assignees · Labels)",
-          "details N comments",
-          "footer change by who · Updated HH:MM"
-        ],
-        "push": [
-          "footer project",
-          "p status",
-          "p <code>branch</code>",
-          "footer pusher",
-          "blockquote expandable commits",
-          "details N files changed · +A −D",
-          "p pipeline line",
-          "p Superseded by a newer push | Branch deleted (plain text, no lamp)",
-          "footer Updated HH:MM"
-        ],
-        "branchDeleted": [
-          "footer project",
-          "p 🗑️ <b>Branch deleted</b>",
-          "p <s>branch</s>",
-          "footer pusher"
-        ]
-      },
-      "statusPhrases": {
-        "pipeline": [
-          "Failed in <stage>",
-          "Failed",
-          "Passed",
-          "Passed with warnings",
-          "<stage> running",
-          "Running",
-          "Waiting for manual: <stage>",
-          "Waiting for manual",
-          "Queued",
-          "Canceled",
-          "Skipped",
-          "Scheduled"
-        ],
-        "mr": [
-          "Open",
-          "Draft",
-          "Merged",
-          "Closed"
-        ],
-        "push": [
-          "<N> commits pushed",
-          "Pushed",
-          "Force-pushed <N> commits",
-          "Branch created · <N> commits",
-          "Branch deleted"
-        ],
-        "rule": "sentence(): stage names keep their own case; only the phrase's first letter is capitalised (`Failed in test`, `Deploy running`, `Waiting for manual: deploy`); the table's stage names go through the same function."
-      },
-      "lamps": {
-        "success": "✅",
-        "failed": "❌",
-        "warning": "⚠️ (passed with warnings, failed allowed, force push)",
-        "running": "🔄 (also canceling)",
-        "pending": "⏳ (created, pending, preparing, waiting; `queued` on a pipeline line)",
-        "canceled": "🚫",
-        "manual": "⏸️",
-        "scheduled": "🕒",
-        "skipped": "⏭️",
-        "mr-open": "🟢",
-        "mr-draft": "📝",
-        "mr-merged": "🟣",
-        "mr-closed": "🔴",
-        "push": "↗︎ (U+2197 U+FE0E; the same text glyph ends URL buttons)",
-        "branch-created": "🌱",
-        "branch-deleted": "🗑️ (one-shot Branch deleted message only)",
-        "threads": "💬",
-        "conflict": "⚔️",
-        "artifacts": "📦",
-        "tag": "🏷️",
-        "downstream": "↳",
-        "parent": "↰",
-        "rule": "A lamp never stands alone and never trails: it precedes the status run, the stage name, or the fact phrase it judges; a reviewer's approval is the word (approved); frozen-push lines carry no lamp.",
-        "unused": "👤 👥 🏷 🔗 🔒 exist in emoji.go for the pending inheritors and appear on no rich card"
-      },
-      "stageTable": {
-        "element": "<table compact>, two rows per stage",
-        "stageRow": "<td>lamp <b>Stage</b></td><td align=\"right\">clock</td>",
-        "jobsRow": "<td>job · job</td><td align=\"right\"></td> — plain inline text with linked job names; cells take inline text only",
-        "aggregate": "running > queued > failed > canceled > manual > scheduled > skipped > warning > passed",
-        "clock": "htmlfmt.Clock: first start to last finish once every job is terminal, else sum of finished durations, else empty; `—` for a wholly skipped or canceled stage",
-        "jobs": "linked names; hard failures first with (reason) unless script_failure; running <i>; skipped and canceled <s>; (allowed to fail), (manual); uniform stage → skipped | canceled | waiting | manual: a, b"
-      },
-      "logFold": {
-        "helper": "htmlfmt.Details(summary, htmlfmt.Pre(lines, \"log\"), open)",
-        "failed": "Error · last lines (open) — first hard-failed job with a tail, once the pipeline is terminal",
-        "running": "Logs · current stage (closed) — the running job's tail",
-        "max": "one per card; none in quiet mode; passed jobs have no log",
-        "config": "pipelines.log_tail.lines / live_lines (default 10), interval (default 15s)"
-      },
-      "folds": {
-        "blockquoteExpandable": [
-          "MR description first line, clipped at 200 runes (mentions rewritten)",
-          "push commit list (<a><code>sha7</code></a> title · author, +N more)"
-        ],
-        "details": [
-          "log fold (open on failure, closed while running)",
-          "MR View changes and description (full description; N files changed · +A −D with file chips from MRState.Diff; Approvals when merged/closed, Reviewers (approved), Assignees, Labels)",
-          "push diff: N files changed · +A −D (file chips; old → new; (new); deleted struck; +N more; (partial))",
-          "MR N comments (<b>Author</b>: <code>path:line</code> <a>excerpt</a>)",
-          "verbose Jobs"
-        ]
-      },
-      "factLines": {
-        "mrOrder": [
-          "🟣 Merged by X into <code>tgt</code> | 🔴 Closed by X",
-          "<lamp> Pipeline #n word [· N failed] [· N manual] (⏳ … queued while pending)",
-          "⚔️ Conflicts with <code>tgt</code>",
-          "💬 N unresolved threads | 💬 Discussions resolved (whenever threads are enriched, every state)",
-          "Approvals n/m · names (open only; folded otherwise)"
-        ],
-        "push": [
-          "<lamp> Pipeline #n word (shared pipelineLine)",
-          "Superseded by a newer push | Branch deleted (plain text)"
-        ],
-        "pipeline": [
-          "↳ Downstream: <a>proj #id</a> word (N failed) · …",
-          "⏸️ Waiting for manual: job, job (quiet mode only)"
-        ],
-        "mrFolded": [
-          "Approvals n/m · names (merged/closed)",
-          "Reviewers a (approved), b",
-          "Assignees a, b",
-          "Labels a, b +N (8 shown)"
-        ]
-      },
-      "footer": {
-        "project": "<footer>client / pokemod / <a>agent</a></footer>",
-        "person": "<footer>Opened by who</footer> (MR) | <footer>who</footer> (push, branch deleted)",
-        "meta": "pipeline: who · commit <a><code>sha7</code></a> · 📦 Artifacts: <a>job</a> size · Updated HH:MM; MR: change by who · Updated HH:MM; push: Updated HH:MM; branch deleted: none",
-        "updated": "the card's last event time in Options.Location, HH:MM"
-      },
-      "keyboard": {
-        "rowWidth": 2,
-        "linkSuffix": " ↗︎ (U+2197 U+FE0E)",
-        "pipeline": [
-          "Open pipeline ↗︎ + Cancel (active, Caps pipeline:cancel) | Retry (failed or canceled, Caps pipeline:retry)",
-          "Play <job> per manual job (blocked, Caps job:play)",
-          "<job> log ↗︎ per failed job, max 3, skipping the job whose log is on the card"
-        ],
-        "mr": [
-          "Open MR ↗︎ + Discussion ↗︎ (#notes)"
-        ],
-        "push": [
-          "Compare ↗︎ (both SHAs real) + Create MR ↗︎ (non-default branch, not superseded)",
-          "Run pipeline (no pipeline linked, not superseded, Caps ref:run)"
-        ],
-        "branchDeleted": "none"
-      },
-      "verbosity": [
-        "quiet",
-        "normal",
-        "verbose"
-      ],
-      "pendingInheritors": [
-        "note.go",
-        "issue.go",
-        "release.go",
-        "deployment.go",
-        "push.go TagPush (classic HTML, prose sentence with a bold actor and a Tag button)"
-      ],
-      "shaChip": "shaChip(sha, url): <a href><code>sha[:7]</code></a>; bare <code> without a URL; used in the commit list and the pipeline meta footer",
-      "pushCard": {
-        "head": "<p>↗︎ <b>N commits pushed</b>: <a>branch</a> • <code>by @user</code></p>; commits quote (sha7 title(48) - author); <hr/>; footer 'N files changed · +A −D' over a compact table path | +A −D; <hr/>; footer pipeline line, frozen line, daily tagline",
-        "body": [
-          "blockquote expandable: <a><code>sha7</code></a> title per commit, +N more",
-          "details 'N files changed · +A −D' over <pre><code class=\"language-diff\"> in git diff --stat shape with per-file counts and totals",
-          "footer pipeline line (queued → running → passed/failed)",
-          "footer 'Superseded by a newer push' | 'Branch deleted' when frozen"
-        ],
-        "keyboard": [
-          [
-            "Compare ↗︎",
-            "Create MR ↗︎"
-          ],
-          [
-            "Run pipeline"
-          ]
-        ]
-      }
-    }
+    "shadows": [],
+    "motion": [],
+    "breakpoints": []
   },
   "components": [
     {
-      "name": "Pipeline card (failed)",
-      "kind": "card",
-      "refersTo": "status",
-      "description": "Failed pipeline: project footer, bold status naming the failed stage in its own case, commit title, ref chip with the MR anchor, stage table with clocks right-aligned and a skipped stage showing —, the error log open, meta footer with the 7-character SHA chip, Open pipeline ↗︎ and Retry.",
-      "html": "<div class=\"ds-card\"><footer class=\"ds-footer\">client / pokemod / <a href=\"#\">agent</a></footer><p>❌ <b>Pipeline <a href=\"#\">#5981</a> · Failed in test</b></p><p>Fix the SSAID grant</p><p><code>feat/ssaid-grant</code> · MR <a href=\"#\">!42</a></p><table class=\"ds-table\"><tr><td>✅ <b>Build</b></td><td class=\"ds-r\">1:02</td></tr><tr><td class=\"ds-jobs\"><a href=\"#\">assemble</a></td><td class=\"ds-r\"></td></tr><tr><td>❌ <b>Test</b></td><td class=\"ds-r\">1:40</td></tr><tr><td class=\"ds-jobs\"><a href=\"#\">unit</a></td><td class=\"ds-r\"></td></tr><tr><td>⏭️ <b>Deploy</b></td><td class=\"ds-r\">—</td></tr><tr><td class=\"ds-jobs\">skipped</td><td class=\"ds-r\"></td></tr></table><details class=\"ds-details\" open><summary>Error · last lines</summary><pre class=\"ds-pre\">FAIL SignalTest.kt:42\nExpected tappable=true\nReceived false\nProcess exited with code 1</pre></details><footer class=\"ds-footer\"><a href=\"#\">Ada Lovelace</a> · commit <a href=\"#\"><code>8f6ded0</code></a> · Updated 04:25</footer></div><div class=\"ds-kb\"><button class=\"ds-btn\">Open pipeline ↗︎</button><button class=\"ds-btn\">Retry</button></div>",
-      "css": ".ds-card { max-width: 360px; padding: 8px 12px; border-radius: 12px; background: #182533; color: #f5f5f5; font: 15px/1.35 -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card p { margin: 4px 0; } .ds-card a { color: #6ab3f3; text-decoration: none; } .ds-card a:hover { text-decoration: underline; } .ds-card code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; color: #6ab3f3; background: rgba(255,255,255,0.06); padding: 0 3px; border-radius: 3px; } .ds-card b { font-weight: 700; } .ds-footer { display: block; font-size: 12px; opacity: 0.6; margin: 2px 0; } .ds-table { border-collapse: collapse; margin: 4px 0; width: 100%; } .ds-table td { padding: 1px 0; vertical-align: top; } .ds-jobs { font-size: 13px; padding-left: 2px !important; } .ds-r { text-align: right; font-size: 13px; opacity: 0.8; } .ds-details { margin: 4px 0; } .ds-details summary { cursor: pointer; } .ds-pre { margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); font: 12px/1.35 'SF Mono', Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; } .ds-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 360px; margin-top: 4px; } .ds-btn { padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(24,37,51,0.85); color: #fff; font: 700 13px/1 -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-btn:hover { background: rgba(24,37,51,1); } .ds-btn:focus-visible { outline: 2px solid #6ab3f3; outline-offset: 2px; }"
+      "name": "Headline",
+      "kind": "custom",
+      "refersTo": "headline",
+      "description": "The fixed title of every card: bold unlinked handle, verb, in|to, linked project, ref chip in parentheses.",
+      "html": "<div class=\"ds-card\"><b>@⁠ada</b> pushed to <a href=\"#\">agent</a> (<a href=\"#\"><code>feat/ssaid-grant</code></a>)<br><b>@⁠emi</b> ran pipeline <a href=\"#\">#84</a> in <a href=\"#\">demo</a> (<a href=\"#\"><code>main</code></a>)<br><b>@⁠ada</b> opened MR <a href=\"#\">!42</a> in <a href=\"#\">demo</a> (<a href=\"#\"><code>feat/x</code></a> → <a href=\"#\"><code>develop</code></a>)</div>",
+      "css": ".ds-card{font:15px/1.4 system-ui,sans-serif;color:inherit;max-width:360px} .ds-card a{color:inherit;text-decoration:underline;text-underline-offset:2px} .ds-card a:hover{text-decoration-thickness:2px} .ds-card a:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-card code{font-family:ui-monospace,Menlo,monospace;font-size:.9em}"
     },
     {
-      "name": "Pipeline card (running)",
-      "kind": "card",
-      "refersTo": "stage",
-      "description": "Running pipeline: the phrase names the running stage, its job is italic on the jobs row, the clock cell is empty, the current-stage log is closed, Cancel beside Open pipeline ↗︎.",
-      "html": "<div class=\"ds-card\"><footer class=\"ds-footer\">client / pokemod / <a href=\"#\">agent</a></footer><p>🔄 <b>Pipeline <a href=\"#\">#5981</a> · Deploy running</b></p><p>Fix the SSAID grant</p><p><code>feat/ssaid-grant</code> · MR <a href=\"#\">!42</a></p><table class=\"ds-table\"><tr><td>✅ <b>Build</b></td><td class=\"ds-r\">1:02</td></tr><tr><td class=\"ds-jobs\"><a href=\"#\">assemble</a></td><td class=\"ds-r\"></td></tr><tr><td>✅ <b>Test</b></td><td class=\"ds-r\">1:40</td></tr><tr><td class=\"ds-jobs\"><a href=\"#\">unit</a></td><td class=\"ds-r\"></td></tr><tr><td>🔄 <b>Deploy</b></td><td class=\"ds-r\"></td></tr><tr><td class=\"ds-jobs\"><i><a href=\"#\">staging</a></i></td><td class=\"ds-r\"></td></tr></table><details class=\"ds-details\"><summary>Logs · current stage</summary><pre class=\"ds-pre\">124 tests passed.\nUploading artifact to staging…</pre></details><footer class=\"ds-footer\"><a href=\"#\">Ada Lovelace</a> · commit <a href=\"#\"><code>8f6ded0</code></a> · Updated 04:25</footer></div><div class=\"ds-kb\"><button class=\"ds-btn\">Open pipeline ↗︎</button><button class=\"ds-btn\">Cancel</button></div>",
-      "css": ".ds-card { max-width: 360px; padding: 8px 12px; border-radius: 12px; background: #182533; color: #f5f5f5; font: 15px/1.35 -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card p { margin: 4px 0; } .ds-card a { color: #6ab3f3; text-decoration: none; } .ds-card a:hover { text-decoration: underline; } .ds-card code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; color: #6ab3f3; background: rgba(255,255,255,0.06); padding: 0 3px; border-radius: 3px; } .ds-card b { font-weight: 700; } .ds-card i { font-style: italic; } .ds-footer { display: block; font-size: 12px; opacity: 0.6; margin: 2px 0; } .ds-table { border-collapse: collapse; margin: 4px 0; width: 100%; } .ds-table td { padding: 1px 0; vertical-align: top; } .ds-jobs { font-size: 13px; padding-left: 2px !important; } .ds-r { text-align: right; font-size: 13px; opacity: 0.8; } .ds-details { margin: 4px 0; } .ds-details summary { cursor: pointer; } .ds-pre { margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.3); font: 12px/1.35 'SF Mono', Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; } .ds-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 360px; margin-top: 4px; } .ds-btn { padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(24,37,51,0.85); color: #fff; font: 700 13px/1 -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-btn:hover { background: rgba(24,37,51,1); } .ds-btn:focus-visible { outline: 2px solid #6ab3f3; outline-offset: 2px; }"
+      "name": "Detail lines",
+      "kind": "custom",
+      "refersTo": "detail-line",
+      "description": "Italic small lines under the title: linked object title, outcome, diff stats, worded facts, people and meta joined by ·.",
+      "html": "<div class=\"ds-card\"><i><a href=\"#\">Fix the SSAID grant</a></i><br><i>Merged by @⁠linus into <code>develop</code></i><br><i>3 changed • +42 −18</i><br><i>Pipeline <a href=\"#\">#5981</a> passed</i><br><i>Discussions resolved</i><br><i>Approvals 1/1 · Reviewers @⁠linus (approved) · Labels client</i></div>",
+      "css": ".ds-card{font:15px/1.4 system-ui,sans-serif;color:inherit;max-width:360px} .ds-card a{color:inherit;text-decoration:underline;text-underline-offset:2px} .ds-card a:hover{text-decoration-thickness:2px} .ds-card a:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-card code{font-family:ui-monospace,Menlo,monospace;font-size:.9em}"
     },
     {
-      "name": "Pipeline card (waiting for manual)",
-      "kind": "card",
-      "refersTo": "button",
-      "description": "Blocked pipeline: the phrase names the manual stage, the uniform stage collapses to `manual: a, b`, no log fold, Open pipeline ↗︎ alone on row one and a Play button per manual job on row two.",
-      "html": "<div class=\"ds-card\"><footer class=\"ds-footer\">client / pokemod / <a href=\"#\">agent</a></footer><p>⏸️ <b>Pipeline <a href=\"#\">#5981</a> · Waiting for manual: deploy</b></p><p>Fix the SSAID grant</p><p><code>feat/ssaid-grant</code> · MR <a href=\"#\">!42</a></p><table class=\"ds-table\"><tr><td>✅ <b>Build</b></td><td class=\"ds-r\">1:02</td></tr><tr><td class=\"ds-jobs\"><a href=\"#\">assemble</a></td><td class=\"ds-r\"></td></tr><tr><td>✅ <b>Test</b></td><td class=\"ds-r\">1:40</td></tr><tr><td class=\"ds-jobs\"><a href=\"#\">unit</a></td><td class=\"ds-r\"></td></tr><tr><td>⏸️ <b>Deploy</b></td><td class=\"ds-r\"></td></tr><tr><td class=\"ds-jobs\">manual: deploy:cdn, deploy:prod</td><td class=\"ds-r\"></td></tr></table><footer class=\"ds-footer\"><a href=\"#\">Ada Lovelace</a> · commit <a href=\"#\"><code>8f6ded0</code></a> · Updated 04:25</footer></div><div class=\"ds-kb\"><button class=\"ds-btn ds-wide\">Open pipeline ↗︎</button><button class=\"ds-btn\">Play deploy:cdn</button><button class=\"ds-btn\">Play deploy:prod</button></div>",
-      "css": ".ds-card { max-width: 360px; padding: 8px 12px; border-radius: 12px; background: #182533; color: #f5f5f5; font: 15px/1.35 -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card p { margin: 4px 0; } .ds-card a { color: #6ab3f3; text-decoration: none; } .ds-card a:hover { text-decoration: underline; } .ds-card code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; color: #6ab3f3; background: rgba(255,255,255,0.06); padding: 0 3px; border-radius: 3px; } .ds-card b { font-weight: 700; } .ds-footer { display: block; font-size: 12px; opacity: 0.6; margin: 2px 0; } .ds-table { border-collapse: collapse; margin: 4px 0; width: 100%; } .ds-table td { padding: 1px 0; vertical-align: top; } .ds-jobs { font-size: 13px; padding-left: 2px !important; } .ds-r { text-align: right; font-size: 13px; opacity: 0.8; } .ds-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 360px; margin-top: 4px; } .ds-wide { grid-column: 1 / -1; } .ds-btn { padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(24,37,51,0.85); color: #fff; font: 700 13px/1 -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-btn:hover { background: rgba(24,37,51,1); } .ds-btn:focus-visible { outline: 2px solid #6ab3f3; outline-offset: 2px; }"
+      "name": "Pipeline commit and stage lines",
+      "kind": "custom",
+      "refersTo": "stage-line",
+      "description": "Plain commit quote (linked title, no SHA), then one stage per line with an emoji per state, words and finish time; only the failed stage carries a log.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-quote\"><a href=\"#\">Fix the SSAID grant</a></div>✅ <b><a href=\"#\">Build</a></b> · 1:02<br>❌ <b><a href=\"#\">Test</a></b>: <code>unit</code> failed · 1:40<div class=\"ds-pre\">FAIL SignalTest.kt:42\nExpected tappable=true\nProcess exited with code 1</div>➖ <b><a href=\"#\">Deploy</a></b>: skipped<br><br><i>Artifacts: <a href=\"#\">assemble</a> 50.6 MB</i></div>",
+      "css": ".ds-card{font:15px/1.4 system-ui,sans-serif;color:inherit;max-width:360px} .ds-card a{color:inherit;text-decoration:underline;text-underline-offset:2px} .ds-card a:hover{text-decoration-thickness:2px} .ds-card a:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-card code{font-family:ui-monospace,Menlo,monospace;font-size:.9em} .ds-quote{margin:4px 0;padding:4px 10px;border-left:3px solid currentColor;border-radius:4px;background:rgba(127,127,127,.12)} .ds-pre{margin:4px 0;padding:6px 10px;border-radius:4px;background:rgba(127,127,127,.12);font:12px/1.35 ui-monospace,Menlo,monospace;white-space:pre}"
     },
     {
-      "name": "Merge request card (open)",
+      "name": "Commits fold",
       "kind": "card",
-      "refersTo": "person",
-      "description": "Open MR: the five-line head with `Opened by` under the `src → tgt` chip, the description's first line quoted, the mock's lines (pipeline, discussions, approvals), the closed `View changes and description` fold, the closed comments fold, `Updated` footer, Open MR ↗︎ and Discussion ↗︎.",
-      "html": "<div class=\"ds-card\"><footer class=\"ds-footer\">client / pokemod / <a href=\"#\">agent</a></footer><p>🟢 <b>MR <a href=\"#\">!42</a> · Open</b></p><p>Fix the SSAID grant</p><p><code>feat/ssaid-grant → develop</code></p><footer class=\"ds-footer\">Opened by <a href=\"#\">Ada Lovelace</a></footer><details class=\"ds-quote\"><summary>Fix the grant subject and update the injectors to 17.19.0.</summary></details><p>❌ Pipeline <a href=\"#\">#5981</a> failed<br>💬 2 unresolved threads<br>Approvals 0/1</p><details class=\"ds-details\"><summary>View changes and description</summary><p>Fix the grant subject and update the injectors to 17.19.0.<br><br>Also keep the SSAID fallback for old devices.</p><p>3 files changed · +42 −18<br><code>SignalTest.kt</code><br><code>Injector.kt</code><br><code>gradle.properties</code></p><p>Reviewers Linus<br>Labels client</p></details><details class=\"ds-details\"><summary>1 comment</summary><p><b>Linus</b>: <code>src/catch.kt:42</code> <a href=\"#\">Keep the SSAID fallback please.</a></p></details><footer class=\"ds-footer\">Updated 04:43</footer></div><div class=\"ds-kb\"><button class=\"ds-btn\">Open MR ↗︎</button><button class=\"ds-btn\">Discussion ↗︎</button></div>",
-      "css": ".ds-card { max-width: 360px; padding: 8px 12px; border-radius: 12px; background: #182533; color: #f5f5f5; font: 15px/1.35 -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card p { margin: 4px 0; } .ds-card a { color: #6ab3f3; text-decoration: none; } .ds-card a:hover { text-decoration: underline; } .ds-card code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; color: #6ab3f3; background: rgba(255,255,255,0.06); padding: 0 3px; border-radius: 3px; } .ds-card b { font-weight: 700; } .ds-footer { display: block; font-size: 12px; opacity: 0.6; margin: 2px 0; } .ds-quote { margin: 4px 0; padding: 4px 8px; border-left: 3px solid #6ab3f3; border-radius: 4px; background: rgba(106,179,243,0.12); } .ds-quote summary { cursor: pointer; list-style: none; } .ds-quote summary::after { content: ' ⌄'; opacity: 0.6; } .ds-quote[open] summary::after { content: ' ⌃'; } .ds-details { margin: 4px 0; } .ds-details summary { cursor: pointer; } .ds-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 360px; margin-top: 4px; } .ds-btn { padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(24,37,51,0.85); color: #fff; font: 700 13px/1 -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-btn:hover { background: rgba(24,37,51,1); } .ds-btn:focus-visible { outline: 2px solid #6ab3f3; outline-offset: 2px; }"
+      "refersTo": "commit-row",
+      "description": "Push commits as an expandable quote headed by the italic diff stats; rows title · @author, linked +N more.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-quote\"><i>3 changed • +42 −18</i><br><a href=\"#\">Fix the SSAID grant</a> · <i>@⁠ada</i><br><a href=\"#\">Update injectors to 17.19.0</a> · <i>@⁠ada</i><br><a href=\"#\">+5 more</a></div></div>",
+      "css": ".ds-card{font:15px/1.4 system-ui,sans-serif;color:inherit;max-width:360px} .ds-card a{color:inherit;text-decoration:underline;text-underline-offset:2px} .ds-card a:hover{text-decoration-thickness:2px} .ds-card a:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-card code{font-family:ui-monospace,Menlo,monospace;font-size:.9em} .ds-quote{margin:4px 0;padding:4px 10px;border-left:3px solid currentColor;border-radius:4px;background:rgba(127,127,127,.12)} .ds-pre{margin:4px 0;padding:6px 10px;border-radius:4px;background:rgba(127,127,127,.12);font:12px/1.35 ui-monospace,Menlo,monospace;white-space:pre}"
     },
     {
-      "name": "Merge request card (merged)",
+      "name": "Labelled fold",
       "kind": "card",
-      "refersTo": "body",
-      "description": "Merged MR: the 🟣 lamp leads both the status line and the `Merged by Linus into develop` fact line; `💬 Discussions resolved` stays outside; approvals, `Reviewers Linus (approved)` and labels fold into `View changes and description`.",
-      "html": "<div class=\"ds-card\"><footer class=\"ds-footer\">client / pokemod / <a href=\"#\">agent</a></footer><p>🟣 <b>MR <a href=\"#\">!42</a> · Merged</b></p><p>Fix the SSAID grant</p><p><code>feat/ssaid-grant → develop</code></p><footer class=\"ds-footer\">Opened by <a href=\"#\">Ada Lovelace</a></footer><details class=\"ds-quote\"><summary>Fix the grant subject and update the injectors to 17.19.0.</summary></details><p>🟣 Merged by Linus into <code>develop</code><br>✅ Pipeline <a href=\"#\">#5981</a> passed<br>💬 Discussions resolved</p><details class=\"ds-details\"><summary>View changes and description</summary><p>Fix the grant subject and update the injectors to 17.19.0.<br><br>Also keep the SSAID fallback for old devices.</p><p>3 files changed · +42 −18<br><code>SignalTest.kt</code><br><code>Injector.kt</code><br><code>gradle.properties</code></p><p>Approvals 1/1 · Linus<br>Reviewers Linus (approved)<br>Labels client</p></details><footer class=\"ds-footer\">Updated 04:43</footer></div><div class=\"ds-kb\"><button class=\"ds-btn\">Open MR ↗︎</button><button class=\"ds-btn\">Discussion ↗︎</button></div>",
-      "css": ".ds-card { max-width: 360px; padding: 8px 12px; border-radius: 12px; background: #182533; color: #f5f5f5; font: 15px/1.35 -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card p { margin: 4px 0; } .ds-card a { color: #6ab3f3; text-decoration: none; } .ds-card a:hover { text-decoration: underline; } .ds-card code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; color: #6ab3f3; background: rgba(255,255,255,0.06); padding: 0 3px; border-radius: 3px; } .ds-card b { font-weight: 700; } .ds-footer { display: block; font-size: 12px; opacity: 0.6; margin: 2px 0; } .ds-quote { margin: 4px 0; padding: 4px 8px; border-left: 3px solid #6ab3f3; border-radius: 4px; background: rgba(106,179,243,0.12); } .ds-quote summary { cursor: pointer; list-style: none; } .ds-quote summary::after { content: ' ⌄'; opacity: 0.6; } .ds-quote[open] summary::after { content: ' ⌃'; } .ds-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 360px; margin-top: 4px; } .ds-btn { padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(24,37,51,0.85); color: #fff; font: 700 13px/1 -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-btn:hover { background: rgba(24,37,51,1); } .ds-btn:focus-visible { outline: 2px solid #6ab3f3; outline-offset: 2px; } .ds-details { margin: 4px 0; } .ds-details summary { cursor: pointer; }"
+      "refersTo": "fold",
+      "description": "Expandable quote with a bold first-line label: Description, N comments, Message, Release notes, Jobs.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-quote\"><b>1 comment</b><br><i>@⁠linus</i>: <code>src/catch.kt:42</code> <a href=\"#\">Keep the SSAID fallback please.</a></div></div>",
+      "css": ".ds-card{font:15px/1.4 system-ui,sans-serif;color:inherit;max-width:360px} .ds-card a{color:inherit;text-decoration:underline;text-underline-offset:2px} .ds-card a:hover{text-decoration-thickness:2px} .ds-card a:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-card code{font-family:ui-monospace,Menlo,monospace;font-size:.9em} .ds-quote{margin:4px 0;padding:4px 10px;border-left:3px solid currentColor;border-radius:4px;background:rgba(127,127,127,.12)} .ds-pre{margin:4px 0;padding:6px 10px;border-radius:4px;background:rgba(127,127,127,.12);font:12px/1.35 ui-monospace,Menlo,monospace;white-space:pre}"
     },
     {
-      "name": "Push card (live)",
-      "kind": "card",
-      "refersTo": "summary",
-      "description": "Push with a linked pipeline: `↗︎ 7 commits pushed`, branch chip, pusher footer, commits quote, the diff fold counted in its summary, the queued pipeline line, Compare ↗︎ and Create MR ↗︎.",
-      "html": "<div class=\"ds-card\"><footer class=\"ds-footer\">client / pokemod / <a href=\"#\">agent</a></footer><p>↗︎ <b>7 commits pushed</b></p><p><code>feat/ssaid-grant</code></p><footer class=\"ds-footer\"><a href=\"#\">Ada Lovelace</a></footer><details class=\"ds-quote\"><summary><a href=\"#\"><code>8f6ded0</code></a> Fix the SSAID grant</summary><div><a href=\"#\"><code>ab92e31</code></a> Update injectors to 17.19.0<br>+5 more</div></details><details class=\"ds-details\"><summary>3 files changed · +42 −18</summary><p><code>SignalTest.kt</code><br><code>Injector.kt</code><br><code>gradle.properties</code></p></details><p>⏳ Pipeline <a href=\"#\">#5986</a> queued</p><footer class=\"ds-footer\">Updated 04:42</footer></div><div class=\"ds-kb\"><button class=\"ds-btn\">Compare ↗︎</button><button class=\"ds-btn\">Create MR ↗︎</button></div>",
-      "css": ".ds-card { max-width: 360px; padding: 8px 12px; border-radius: 12px; background: #182533; color: #f5f5f5; font: 15px/1.35 -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card p { margin: 4px 0; } .ds-card a { color: #6ab3f3; text-decoration: none; } .ds-card a:hover { text-decoration: underline; } .ds-card code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; color: #6ab3f3; background: rgba(255,255,255,0.06); padding: 0 3px; border-radius: 3px; } .ds-card b { font-weight: 700; } .ds-footer { display: block; font-size: 12px; opacity: 0.6; margin: 2px 0; } .ds-quote { margin: 4px 0; padding: 4px 8px; border-left: 3px solid #6ab3f3; border-radius: 4px; background: rgba(106,179,243,0.12); } .ds-quote summary { cursor: pointer; list-style: none; } .ds-quote summary::after { content: ' ⌄'; opacity: 0.6; } .ds-quote[open] summary::after { content: ' ⌃'; } .ds-details { margin: 4px 0; } .ds-details summary { cursor: pointer; } .ds-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 360px; margin-top: 4px; } .ds-btn { padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(24,37,51,0.85); color: #fff; font: 700 13px/1 -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-btn:hover { background: rgba(24,37,51,1); } .ds-btn:focus-visible { outline: 2px solid #6ab3f3; outline-offset: 2px; }"
+      "name": "Ref chip",
+      "kind": "chip",
+      "refersTo": "ref-chip",
+      "description": "Branch or tag in code, linked to its tree or tag page, in the headline's parentheses.",
+      "html": "<div class=\"ds-card\">(<a href=\"#\"><code>feat/ssaid-grant</code></a>)</div>",
+      "css": ".ds-card{font:15px/1.4 system-ui,sans-serif;color:inherit;max-width:360px} .ds-card a{color:inherit;text-decoration:underline;text-underline-offset:2px} .ds-card a:hover{text-decoration-thickness:2px} .ds-card a:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-card code{font-family:ui-monospace,Menlo,monospace;font-size:.9em}"
     },
     {
-      "name": "Push card (superseded)",
-      "kind": "card",
-      "refersTo": "body",
-      "description": "Frozen push: the pipeline line has settled, `Superseded by a newer push` sits above the footer as plain text, and only Compare ↗︎ remains on the keyboard.",
-      "html": "<div class=\"ds-card\"><footer class=\"ds-footer\">client / pokemod / <a href=\"#\">agent</a></footer><p>↗︎ <b>7 commits pushed</b></p><p><code>feat/ssaid-grant</code></p><footer class=\"ds-footer\"><a href=\"#\">Ada Lovelace</a></footer><details class=\"ds-quote\"><summary><a href=\"#\"><code>8f6ded0</code></a> Fix the SSAID grant</summary><div><a href=\"#\"><code>ab92e31</code></a> Update injectors to 17.19.0<br>+5 more</div></details><details class=\"ds-details\"><summary>3 files changed · +42 −18</summary><p><code>SignalTest.kt</code><br><code>Injector.kt</code><br><code>gradle.properties</code></p></details><p>❌ Pipeline <a href=\"#\">#5986</a> failed</p><p>Superseded by a newer push</p><footer class=\"ds-footer\">Updated 04:42</footer></div><div class=\"ds-kb\"><button class=\"ds-btn ds-wide\">Compare ↗︎</button></div>",
-      "css": ".ds-card { max-width: 360px; padding: 8px 12px; border-radius: 12px; background: #182533; color: #f5f5f5; font: 15px/1.35 -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card p { margin: 4px 0; } .ds-card a { color: #6ab3f3; text-decoration: none; } .ds-card a:hover { text-decoration: underline; } .ds-card code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; color: #6ab3f3; background: rgba(255,255,255,0.06); padding: 0 3px; border-radius: 3px; } .ds-card b { font-weight: 700; } .ds-footer { display: block; font-size: 12px; opacity: 0.6; margin: 2px 0; } .ds-quote { margin: 4px 0; padding: 4px 8px; border-left: 3px solid #6ab3f3; border-radius: 4px; background: rgba(106,179,243,0.12); } .ds-quote summary { cursor: pointer; list-style: none; } .ds-quote summary::after { content: ' ⌄'; opacity: 0.6; } .ds-quote[open] summary::after { content: ' ⌃'; } .ds-details { margin: 4px 0; } .ds-details summary { cursor: pointer; } .ds-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 360px; margin-top: 4px; } .ds-wide { grid-column: 1 / -1; } .ds-btn { padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(24,37,51,0.85); color: #fff; font: 700 13px/1 -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-btn:hover { background: rgba(24,37,51,1); } .ds-btn:focus-visible { outline: 2px solid #6ab3f3; outline-offset: 2px; }"
-    },
-    {
-      "name": "Branch deleted",
-      "kind": "card",
-      "refersTo": "struck",
-      "description": "The one-shot deletion message: project footer, `🗑️ Branch deleted`, the branch struck with no code chip, the pusher footer; no meta footer, no keyboard.",
-      "html": "<div class=\"ds-card\"><footer class=\"ds-footer\">client / pokemod / <a href=\"#\">agent</a></footer><p>🗑️ <b>Branch deleted</b></p><p><s>feat/ssaid-grant</s></p><footer class=\"ds-footer\"><a href=\"#\">Ada Lovelace</a></footer></div>",
-      "css": ".ds-card { max-width: 360px; padding: 8px 12px; border-radius: 12px; background: #182533; color: #f5f5f5; font: 15px/1.35 -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card p { margin: 4px 0; } .ds-card a { color: #6ab3f3; text-decoration: none; } .ds-card a:hover { text-decoration: underline; } .ds-card b { font-weight: 700; } .ds-card s { opacity: 0.7; } .ds-footer { display: block; font-size: 12px; opacity: 0.6; margin: 2px 0; }"
-    },
-    {
-      "name": "Keyboard",
+      "name": "Stop pipeline button",
       "kind": "button",
-      "refersTo": "button",
-      "description": "Every button the build draws, as the client draws them: two per row, ↗︎ (U+2197 U+FE0E) on URL buttons, bare verbs on callbacks, no glyphs, no counts.",
-      "html": "<div class=\"ds-kb\"><button class=\"ds-btn\">Open pipeline ↗︎</button><button class=\"ds-btn\">Retry</button><button class=\"ds-btn\">Open pipeline ↗︎</button><button class=\"ds-btn\">Cancel</button><button class=\"ds-btn\">Play deploy:cdn</button><button class=\"ds-btn\">Play deploy:prod</button><button class=\"ds-btn\">unit log ↗︎</button><button class=\"ds-btn\">assemble log ↗︎</button><button class=\"ds-btn\">Open MR ↗︎</button><button class=\"ds-btn\">Discussion ↗︎</button><button class=\"ds-btn\">Compare ↗︎</button><button class=\"ds-btn\">Create MR ↗︎</button><button class=\"ds-btn ds-wide\">Run pipeline</button></div>",
-      "css": ".ds-kb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 360px; padding: 8px; border-radius: 12px; background: #0e1621; } .ds-wide { grid-column: 1 / -1; } .ds-btn { padding: 8px 10px; border: 0; border-radius: 8px; background: rgba(24,37,51,0.85); color: #fff; font: 700 13px/1 -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-btn:hover { background: rgba(24,37,51,1); } .ds-btn:focus-visible { outline: 2px solid #6ab3f3; outline-offset: 2px; }"
+      "refersTo": "stop-button",
+      "description": "Plain-word callback button while a pipeline is active.",
+      "html": "<div class=\"ds-kb\"><button class=\"ds-btn\">Stop pipeline</button></div>",
+      "css": ".ds-kb{display:flex;gap:4px;max-width:360px;margin-top:4px} .ds-btn{flex:1;padding:8px 12px;border:0;border-radius:6px;background:rgba(127,127,127,.18);color:inherit;font:14px/1.2 system-ui,sans-serif;cursor:pointer;transition:background .15s} .ds-btn:hover{background:rgba(127,127,127,.28)} .ds-btn:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-btn:active{background:rgba(127,127,127,.36)}"
+    },
+    {
+      "name": "Stop confirmation",
+      "kind": "button",
+      "refersTo": "stop-confirm-button",
+      "description": "The row a Stop press swaps in; kept across edits by ConfirmStop.",
+      "html": "<div class=\"ds-kb\"><button class=\"ds-btn\">Yes, stop it</button><button class=\"ds-btn\">Keep running</button></div>",
+      "css": ".ds-kb{display:flex;gap:4px;max-width:360px;margin-top:4px} .ds-btn{flex:1;padding:8px 12px;border:0;border-radius:6px;background:rgba(127,127,127,.18);color:inherit;font:14px/1.2 system-ui,sans-serif;cursor:pointer;transition:background .15s} .ds-btn:hover{background:rgba(127,127,127,.28)} .ds-btn:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-btn:active{background:rgba(127,127,127,.36)}"
+    },
+    {
+      "name": "Retry button",
+      "kind": "button",
+      "refersTo": "retry-button",
+      "description": "Plain-word callback button once a pipeline failed, no confirmation.",
+      "html": "<div class=\"ds-kb\"><button class=\"ds-btn\">Retry</button></div>",
+      "css": ".ds-kb{display:flex;gap:4px;max-width:360px;margin-top:4px} .ds-btn{flex:1;padding:8px 12px;border:0;border-radius:6px;background:rgba(127,127,127,.18);color:inherit;font:14px/1.2 system-ui,sans-serif;cursor:pointer;transition:background .15s} .ds-btn:hover{background:rgba(127,127,127,.28)} .ds-btn:focus-visible{outline:2px solid currentColor;outline-offset:2px} .ds-btn:active{background:rgba(127,127,127,.36)}"
     }
   ],
   "narrative": {
-    "northStar": "The Five-Line Head",
-    "overview": "**Creative North Star: \"The Five-Line Head\"**\n\nGitgram owns no canvas, no colour and no font. Its surface is a Telegram rich message (Bot API 10.1+, built block by block through `htmlfmt.Doc`) plus a normal inline keyboard, drawn by whichever client and theme the reader chose. The design system is a text grammar: which fact sits in which block, which block is small, which is bold, which is monospace, which folds, which is a button. The world is the user's own five mocks, transcribed in `.impeccable/surfaces/internal-render.md`, and the build follows them line for line.\n\nEvery pipeline, merge request and push card opens with the same head, read top to bottom in one glance on a phone: a small `<footer>` project line (`client / pokemod / agent`, the configured group stripped, segments joined by ` / `, the project name linked); a bold status line led by one lamp whose phrase names what matters (`❌ Pipeline #5981 · Failed in test`, `🟣 MR !42 · Merged`, `↗︎ 7 commits pushed`); the object's title as a plain paragraph; a `<code>` chip for the ref (`feat/ssaid-grant · MR !42`, `feat/ssaid-grant → develop`, the branch); and a small `<footer>` for the person (`Opened by Ada Lovelace`, the pusher). Below the head the body is the object's evidence: a `<table compact>` of stages with a clock time right-aligned on each stage row and the jobs as plain linked text on the row beneath, one `<details>` log fold, an expandable quote for the first line of prose (description, commits), a `<details>` fold for the rest (`View changes and description`, `3 files changed · +42 −18`, `1 comment`), one paragraph of `<br/>`-separated facts on an MR, a pipeline line on a push. A closing `<footer>` holds the small print: who ran it, the commit as a 7-character code chip, the artifacts, `Updated HH:MM`. The keyboard is plain: two buttons per row, `↗︎` on every button that leaves Telegram, verbs bare (`Retry`, `Cancel`, `Play deploy:cdn`, `Run pipeline`).\n\nThe build refuses the category default: the emoji-stat rows and the sentence bot (`emi pushed 3 commits to develop in group/sub/project`), and it also refuses the previous world's devices: no `<h4>`, no `<mark>`, no `<ul>`, no in-text buttons, no bot reactions and no reaction controls. Status emoji appear only where the mocks draw them: on the status line, on stage rows, and on the fact lines that carry a state (`✅ Pipeline #5981 passed`, `🟣 Merged by Linus`, `💬 Discussions resolved`); a frozen push says `Superseded by a newer push` in plain text. Output is deterministic (same state, same bytes) so edits are hash-skipped. Note, issue, tag, release and deployment cards still speak classic Bot API HTML and are pending inheritors of this grammar.",
+    "northStar": "The Fixed Title",
+    "overview": "Gitgram owns no canvas, no colour and no font. Its surface is a classic Telegram Bot API HTML message (`<b>`, `<i>`, `<s>`, `<code>`, `<pre><code class=\"language-log\">`, `<a>`, `<blockquote>`, `<blockquote expandable>`) plus, on cards that carry a pipeline, one row of callback buttons, drawn by whichever client and theme the reader chose. The design system is a text grammar built in `internal/render/render.go` from three kinds of line: the **headline**, written only by `headline(b, lead, prep, project, ref)`; **small lines**, italic, carrying the detail; and **folds**, expandable quotes whose bold first line is the label. Italic stands in for small text and a blank line stands in for a rule.\n\nEvery card opens with one headline that reads `@someone did this in|to repo (ref)`: the actor's handle in bold, what they did, a preposition, the linked project, and the ref in parentheses. The headline is the card's title and never changes once posted: a pipeline is `@emi ran pipeline #84 in demo (main)` from queued to failed; an MR is always its opening, `@ada opened MR !42 in demo (src → tgt)`, and merging or closing it adds small lines, never a new title. State lives below the title: in small fact lines, in the stage lines, in the buttons. Rendering is pure and deterministic, so identical state yields identical bytes and edits are hash-skipped.\n\nThe cards are text only. No emoji appears anywhere in rendered output: no status lamps, no button icons, no fact-line markers. No SHA appears anywhere either: a commit is its title, linked to the commit.",
     "keyCharacteristics": [
-      "Fixed five-line head on every rich card: project `<footer>`, bold status `<p>`, title `<p>`, `<code>` ref `<p>`, person `<footer>`; slots a card has nothing for are omitted, never left blank.",
-      "One bold run per card, and it is the status line: lamp, space, `<b>Object anchor · Phrase</b>`; the phrase names the stage that failed or is running, the MR state, or what the push did, with the stage name in its own case and only the phrase's first letter capitalised (`sentence()`).",
-      "One separator: ` · ` (space, middle dot, space) joins fragments everywhere (status line, ref line, footers, summaries, fact lines); ` / ` joins only the project path; ` → ` joins only source and target.",
-      "Stages are a `<table compact>` with two rows per stage: `lamp <b>Stage</b>` with the clock (`m:ss`) right-aligned, then the jobs as plain text with linked names; table cells take inline text only.",
-      "One log fold per pipeline card: `Error · last lines` open once failed, `Logs · current stage` closed while running; the log is `<pre><code class=\"language-log\">`.",
-      "Two folds: `<blockquote expandable>` for one line of prose (the MR description's first line, the commit list) and a closed `<details>` for the rest: `View changes and description` on an MR, `3 files changed · +42 −18` on a push, `1 comment`, `Jobs`.",
-      "`<code>` carries refs, file names, diff positions and the 7-character commit SHA chip inside its link; `<i>` marks only the running job; `<s>` marks only what will not happen (skipped and canceled jobs, a closed MR's title, a deleted branch, a deleted file).",
-      "Two `<footer>`s of small print: the project line at the top and the closing meta line (`who · commit <code>8f6ded0</code> · 📦 Artifacts: … · Updated HH:MM`), plus the person line under the ref chip.",
-      "A normal inline keyboard, two buttons per row, `↗︎` (U+2197 U+FE0E, text presentation) on every URL button and never on a callback button; a card with nothing to do has no keyboard.",
-      "Lamps are the only emoji: pipeline and job states (✅ ❌ ⚠️ 🔄 ⏳ ⏸️ ⏭️ 🚫 🕒), MR states (🟢 📝 🟣 🔴), push kinds (↗︎ 🌱 🗑️, ⚠️ force), and four markers (💬 threads, ⚔️ conflict, 📦 artifacts, 🏷️ tag ref) with the two relation arrows (↳ downstream, ↰ parent)."
+      "One fixed headline per card: bold unlinked handle, verb, preposition, linked project, ref in parentheses.",
+      "Italic is the small-text voice: titles, fact lines, people, meta, diff stats, artifacts, the tagline.",
+      "Pipeline state lives in the stage lines (an emoji per state plus words and a finish time); there is no status line.",
+      "Only a failed stage gets a log: a bare `language-log` block right under it.",
+      "Commits are linked titles, never SHAs; push commit rows are `title · @author` under the italic diff stats.",
+      "Buttons are plain words: `Stop pipeline`, then `Yes, stop it` / `Keep running`; `Retry`.",
+      "Roughly one card in ten closes with a line of house humour."
     ],
     "rules": [
       {
-        "name": "The Lamp Beside Its Word Rule",
-        "body": "A lamp never stands alone and never trails. On the status line it precedes the bold run; on a stage row it precedes the bold stage name; on a fact line it precedes the phrase it judges (`✅ Pipeline #5981 passed`, `💬 2 unresolved threads`, `⚔️ Conflicts with develop`). A reviewer's approval is a word, `Linus (approved)`, not a glyph.",
-        "section": "colors"
-      },
-      {
-        "name": "The Lamps Are The Only Emoji Rule",
-        "body": "Status lamps on status lines and stage rows, state lamps on fact lines, four markers and two arrows. Frozen-push lines (`Superseded by a newer push`, `Branch deleted`) are plain text. No decorative glyphs, no person or people icons, no glyphs on buttons, no reactions. `👤 👥 🏷 🔗 🔒` exist in `emoji.go` for the pending inheritors and appear on no rich card.",
-        "section": "colors"
-      },
-      {
-        "name": "The One Bold Line Rule",
-        "body": "`<b>` wraps the status line's run (`Pipeline #5981 · Failed in test`) and the stage names in the table; the only other bold is a note author inside the comments fold (`<b>Linus</b>:`) and a stage header inside the verbose `Jobs` fold. The title, ref, footers, fact lines and buttons are never bold.",
+        "name": "The Fixed Title Rule",
+        "body": "The headline is written once, by `headline()`, and never changes while the card is edited. State goes in the lines below it, never into the title.",
         "section": "typography"
       },
       {
-        "name": "The Phrase Names The Stage Rule",
-        "body": "The status phrase says where, not just what: `Failed in test`, `Deploy running`, `Waiting for manual: deploy`. Stage names keep the case GitLab gave them; `sentence()` capitalises only the first letter of the phrase, and the same function capitalises the stage name in the table so `Failed in test` points at the `Test` row.",
+        "name": "The Small-Voice Rule",
+        "body": "Italic means small text. Anything that is detail, meta or aside is a whole italic line, with the push fold's italic diff-stats row and the italic handles in fold rows as the only inner runs.",
         "section": "typography"
       },
       {
-        "name": "The Middle Dot Rule",
-        "body": "` · ` is the only fragment separator: on the status line, the ref line, the footers, the fact lines, the summaries and the jobs row. The project path uses ` / ` and the branch movement ` → `; nothing uses ` • `, ` - `, `|` or `,` between fragments (commas belong inside a list of names: `manual: deploy:cdn, deploy:prod`, `Reviewers Linus, Tom`).",
-        "section": "typography"
-      },
-      {
-        "name": "The Chip Is One Code Run Rule",
-        "body": "The ref line's chip is a single `<code>` span: `feat/ssaid-grant`, or `feat/ssaid-grant → develop` with the arrow inside the code. Anchors beside it (`MR !42`, `child of #9`) are plain links outside the code. A commit is the opposite nesting: the `<code>` chip sits inside the `<a>`.",
-        "section": "typography"
-      },
-      {
-        "name": "The Same Head Rule",
-        "body": "Project, status, title, ref, person, in that order, on every rich card; a slot the object lacks is skipped, and the body never begins before the person line.",
+        "name": "The Blank-Line Rule",
+        "body": "The only separator is an empty line: before the stage block while a pipeline runs or when a push absorbs a finished pipeline, before the artifacts and update meta, and before a tagline. No rules, no dividers, no glyph rows.",
         "section": "layout"
       },
       {
-        "name": "The Clock Column Rule",
-        "body": "The stage table's last cell is `align=\"right\"` and is emitted even when empty, so the clock times form one column the eye runs down; a skipped or canceled stage shows `—` there rather than nothing. Cells hold inline text only.",
+        "name": "The Folds-First Rule",
+        "body": "When a card is too long, the expandable folds give way before any fact line does.",
         "section": "layout"
       },
       {
-        "name": "The Mock's Lines Stay Out Rule",
-        "body": "Outside the MR's fold only the lines the mock draws appear: how it ended, its pipeline, conflicts, discussions, and approvals while open. Reviewers, assignees, labels, the diff and the full description live inside `View changes and description`.",
-        "section": "layout"
-      },
-      {
-        "name": "The Frozen Card Rule",
-        "body": "A superseded push card says so in a plain line above the footer, drops `Create MR ↗︎` and `Run pipeline`, and keeps `Compare ↗︎`; nothing above the line is rewritten.",
-        "section": "layout"
-      },
-      {
-        "name": "The Keyboard Is Two Wide Rule",
-        "body": "Two buttons per row; the destination first (`Open pipeline ↗︎`, `Compare ↗︎`), the operation second (`Retry`, `Create MR ↗︎`); further operations on their own rows below. A single button sits alone on its row.",
-        "section": "layout"
-      },
-      {
-        "name": "The One Fold Opens Rule",
-        "body": "Only the log fold ever opens by itself, and only on failure (`Error · last lines`); while running it is closed (`Logs · current stage`); everything else folds closed.",
-        "section": "elevation"
-      },
-      {
-        "name": "The Two Folds Rule",
-        "body": "A line of prose folds into `<blockquote expandable>`; a labelled thing folds into `<details>` whose summary is the count when there is one (`3 files changed · +42 −18`, `1 comment`) or the name of what it holds (`View changes and description`). If a reader must expand to learn whether something failed, the card is wrong.",
-        "section": "elevation"
-      },
-      {
-        "name": "The Log Is Evidence Rule",
-        "body": "A `<pre>` block is only ever a job log, only ever inside the one log fold, only for the first hard-failed job or the running job; passed jobs have no log. Lines are ANSI-stripped, section markers dropped, capped by `pipelines.log_tail` (`lines`, `live_lines`, default 10).",
+        "name": "The Failure Log Rule",
+        "body": "Only a failed stage gets a log: the hard-failed job's last lines, fetched once the job has failed, as a plain `language-log` block right under its stage. Running stages show no log and nothing polls a running job's trace. No `pre` sits inside a quote: Telegram Desktop pulls it out.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "Do open every rich card with the `<footer>` project line (`client / pokemod / <a>agent</a>`, group stripped, ` / ` between segments) and then the bold status line led by its lamp.",
-      "Do make the status phrase name the stage in the stage's own case, capitalising only the first letter through `sentence()`: `Failed in test`, `Deploy running`, `Waiting for manual: deploy`.",
-      "Do keep the head order project, status, title, ref chip, person, and omit a slot the card has nothing for.",
-      "Do join fragments with ` · ` everywhere, ` / ` in the project path, ` → ` between branches inside one `<code>` chip.",
-      "Do render stages as `<table compact>` with two rows per stage, the clock (`htmlfmt.Clock`, `m:ss`) right-aligned on the stage row and the jobs as plain inline text with linked names on the row beneath; `—` for a skipped or canceled stage.",
-      "Do list hard-failed jobs first with their reason unless it is `script_failure`, italicise the running job, strike skipped and canceled ones, and collapse a uniform stage to one word.",
-      "Do carry exactly one log fold: `Error · last lines` open on failure, `Logs · current stage` closed while running, the log in `<pre><code class=\"language-log\">`.",
-      "Do quote only the description's first line (200 runes) and fold the full description, the diff and the people into a closed `View changes and description`.",
-      "Do keep outside the MR fold only the mock's lines, in order: merged/closed by whom, pipeline, conflicts, `💬` discussions whenever enriched, approvals while open; use the shared `pipelineLine` for the pipeline on MR and push cards.",
-      "Do write a commit SHA as a 7-character `<code>` chip inside its link (`shaChip`), in the commit list and the pipeline footer.",
-      "Do strike what will not happen: skipped and canceled jobs, a closed MR's title, a deleted branch, a deleted file.",
-      "Do close with a `<footer>` ending in `Updated HH:MM` (pipelines also `who · commit <sha chip> · 📦 Artifacts:`), and leave the one-shot branch-deleted message without one.",
-      "Do draw the keyboard two wide, destination first, ` ↗︎` (U+2197 U+FE0E) on every URL button, bare verbs on callbacks, and drop `Create MR ↗︎` and `Run pipeline` from a superseded push.",
-      "Do keep output deterministic: same state, same bytes; drop whole blocks from the end only past `htmlfmt.RichLimit`."
+      "**Do** open every card with one `headline(b, lead, prep, project, ref)` call: bold handle, what they did, `in` or `to`, linked project, ref in parentheses.",
+      "**Do** keep the headline identical across every edit of a card; put outcomes (`Merged by …`, `Closed by …`, stage results) on the lines below.",
+      "**Do** put every detail on its own italic line through `small()`.",
+      "**Do** carry the pipeline result in the stage lines: the state's emoji, the state in words, the time once the stage finished.",
+      "**Do** put a failed stage's log as a bare `language-log` block right under it.",
+      "**Do** render commits as their linked title through `commitLine`, with `· @author` in the push fold.",
+      "**Do** fold proof in `<blockquote expandable>` with the bold label as the first line inside the quote.",
+      "**Do** join fragments and fold rows with ` · `; ` • ` only between file counts and line counts in the diff stats.",
+      "**Do** build through `htmlfmt.Builder` and finish with `Truncate(limit, url)` so folds shorten before facts drop."
     ],
     "donts": [
-      "Don't use `<h4>`, `<mark>`, `<ul>`, in-text `<tg-button>`s, bot reactions or reaction controls; the previous world is gone.",
-      "Don't bold anything but the status run, the stage names, a note author in the comments fold and a stage header in the verbose fold.",
-      "Don't italicise anything but the running job, or strike anything that may still happen.",
-      "Don't put a lamp anywhere without the word it judges, trail a name with a glyph (`(approved)` is a word), add a glyph to a button, put a lamp on a frozen-push line, or use any emoji outside the lamp vocabulary (`👤 👥 🏷 🔗 🔒` are for the pending inheritors only).",
-      "Don't write the person on the status line or the title; the person is a `<footer>` under the ref chip and the meta footer at the bottom.",
-      "Don't put a block, a `<footer>` or a `<p>` inside a table cell; cells take inline text only.",
-      "Don't link stage names, put a job's log anywhere but the one log fold, show a log for a passed job, or open a fold other than the failure log.",
-      "Don't put reviewers, assignees, labels, the diff or the full description outside the MR's `View changes and description` fold.",
-      "Don't use ` • `, ` - `, `|` or `,` as a fragment separator, put the ` → ` outside the `<code>` chip, or use the emoji-presentation `↗️` where the text glyph `↗︎` belongs.",
-      "Don't hide state inside a quote or a details block; the status line and the table must say what failed before anything is expanded.",
-      "Don't draw a callback button without `Options.Caps`, more than two buttons on a row, more than three log buttons, or a log button for the job whose log is already on the card.",
-      "Don't write a prose sentence (`emi pushed 3 commits to develop in …`) or an emoji-stat row on a rich card."
+      "**Don't** put an emoji anywhere: not on status, not on buttons, not on fact lines.",
+      "**Don't** show a SHA anywhere; a commit is its linked title.",
+      "**Don't** change a card's title after it is posted or add a status line above the stages.",
+      "**Don't** show a log for a running or passed stage, or poll a running job's trace.",
+      "**Don't** link a handle or drop the word joiner after its `@`.",
+      "**Don't** put a log `pre` inside a quote.",
+      "**Don't** add URL buttons; Stop (confirmed) while active and Retry once failed are the whole keyboard.",
+      "**Don't** assume a colour, font or theme; everything must read in light and dark clients."
     ]
   }
 }

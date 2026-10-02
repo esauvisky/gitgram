@@ -3,7 +3,6 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/esauvisky/gitgram/internal/actions"
 	"github.com/esauvisky/gitgram/internal/cards"
@@ -59,16 +58,14 @@ func (e *Engine) options(eff config.EffectiveProject) render.Options {
 	}
 	return render.Options{
 		Verbosity:       eff.Verbosity,
-		Mentions:        e.cfg.Users,
 		Caps:            caps,
 		ShowDescription: eff.MR.ShowDescription,
-		Location:        time.Local,
 	}
 }
 
 // toTelegram converts a render.Message into the sender's mirror type.
 func toTelegram(m render.Message) telegram.Message {
-	out := telegram.Message{HTML: m.HTML, Rich: m.Rich}
+	out := telegram.Message{HTML: m.HTML}
 	if m.Keyboard == nil {
 		return out
 	}

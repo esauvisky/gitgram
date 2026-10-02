@@ -2,7 +2,6 @@ package render
 
 import (
 	"hash/fnv"
-	"strings"
 
 	"github.com/esauvisky/gitgram/internal/render/htmlfmt"
 )
@@ -42,24 +41,17 @@ var taglines = []string{
 // taglineOdds is the share of cards that get a tagline: one in ten.
 const taglineOdds = 10
 
-// taglineFooter closes one card in taglineOdds with a blank line (two
-// after a fold, whose own border sits tight under it), a separator, then
-// a tagline in italics. Both the draw and the line come from a hash of the
+// taglineFooter closes one card in taglineOdds with a blank line and a
+// tagline in italics. Both the draw and the line come from a hash of the
 // card's seed, so a card keeps its tagline (or its silence) across edits
-// and different cards get different lines. The blank is a paragraph
-// holding a braille blank, the one glyph clients keep while showing
-// nothing.
-func taglineFooter(d *htmlfmt.Doc, seed string) {
+// and different cards get different lines.
+func taglineFooter(b *htmlfmt.Builder, seed string) {
 	h := fnv.New64a()
 	h.Write([]byte(seed))
 	n := h.Sum64()
 	if n%taglineOdds != 0 {
 		return
 	}
-	if strings.HasPrefix(d.Last(), "<details") {
-		d.P("\u2800")
-	}
-	d.P("\u2800")
-	d.Block(htmlfmt.Divider())
-	d.Block(htmlfmt.Footer(htmlfmt.I(taglines[(n/taglineOdds)%uint64(len(taglines))])))
+	b.Line("")
+	b.Line(htmlfmt.I(taglines[(n/taglineOdds)%uint64(len(taglines))]))
 }

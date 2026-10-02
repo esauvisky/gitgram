@@ -210,12 +210,9 @@ func (s *Sender) deliverCard(ctx, run context.Context, chat int64, card *Card, m
 		ChatID:             chat,
 		MessageID:          *card.MessageID,
 		LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: bot.True()},
+		Text:               msg.HTML,
+		ParseMode:          models.ParseModeHTML,
 		ReplyMarkup:        msg.replyMarkup(),
-	}
-	if rich := msg.rich(); rich != nil {
-		edit.RichMessage = rich
-	} else {
-		edit.Text, edit.ParseMode = msg.HTML, models.ParseModeHTML
 	}
 	if _, tgErr := s.client.bot.EditMessageText(ctx, edit); tgErr != nil {
 		if o, _ := classify(tgErr); o != outcomeNotModified {
@@ -298,12 +295,6 @@ func (s *Sender) send(ctx, run context.Context, chat int64, msg Message, threadI
 		thread = int(*threadID)
 	}
 	post := func(thread int) (*models.Message, error) {
-		if rich := msg.rich(); rich != nil {
-			return s.client.bot.SendRichMessage(ctx, &bot.SendRichMessageParams{
-				ChatID: chat, MessageThreadID: thread, RichMessage: *rich,
-				ReplyParameters: reply, ReplyMarkup: msg.replyMarkup(),
-			})
-		}
 		return s.client.bot.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chat, MessageThreadID: thread, Text: msg.HTML, ParseMode: models.ParseModeHTML,
 			LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: bot.True()},

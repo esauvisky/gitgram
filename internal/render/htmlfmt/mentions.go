@@ -10,11 +10,11 @@ import (
 // alone. Group 1 is the prefix, group 2 the username.
 var mentionRE = regexp.MustCompile(`(^|[^\w/.-])@([A-Za-z0-9_.-]+)`)
 
-// RewriteMentions replaces @username occurrences in an already-escaped body
-// with a Telegram user mention when the username is mapped in m and with
-// inline code otherwise. Trailing dots are treated as punctuation, not part
-// of the username.
-func RewriteMentions(escapedBody string, m map[string]int64) string {
+// RewriteMentions sets @username occurrences in an already-escaped body in
+// italics, the way cards show handles; they are never links (a word joiner
+// after the @ stops Telegram detecting a mention). Trailing dots
+// are treated as punctuation, not part of the username.
+func RewriteMentions(escapedBody string) string {
 	idx := mentionRE.FindAllStringSubmatchIndex(escapedBody, -1)
 	if len(idx) == 0 {
 		return escapedBody
@@ -31,11 +31,8 @@ func RewriteMentions(escapedBody string, m map[string]int64) string {
 		sb.WriteString(prefix)
 		if trimmed == "" {
 			sb.WriteString("@" + name)
-		} else if id := MentionID(m, trimmed); id != 0 {
-			sb.WriteString(Mention("@"+trimmed, id))
-			sb.WriteString(tail)
 		} else {
-			sb.WriteString("<code>@" + trimmed + "</code>")
+			sb.WriteString("<i>@\u2060" + trimmed + "</i>")
 			sb.WriteString(tail)
 		}
 		last = loc[1]

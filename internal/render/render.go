@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/esauvisky/gitgram/internal/actions"
 	"github.com/esauvisky/gitgram/internal/event"
@@ -31,14 +30,10 @@ type Button struct {
 	Data string `json:"data,omitempty"`
 }
 
-// Message is a rendered Telegram message: HTML body plus inline keyboard
-// rows (nil when the message has no buttons).
+// Message is a rendered Telegram message: Bot API HTML body plus inline
+// keyboard rows (nil when the message has no buttons).
 type Message struct {
-	// HTML is Bot API HTML for classic messages; Rich is rich message HTML
-	// (headings, tables, details, footers, in-message buttons). Exactly one
-	// is set.
 	HTML     string
-	Rich     string
 	Keyboard [][]Button
 }
 
@@ -47,7 +42,6 @@ type Message struct {
 func (m Message) Hash() string {
 	h := sha256.New()
 	h.Write([]byte(m.HTML))
-	h.Write([]byte(m.Rich))
 	kb, err := json.Marshal(m.Keyboard)
 	if err != nil {
 		panic(err)
@@ -60,17 +54,12 @@ func (m Message) Hash() string {
 type Options struct {
 	// Verbosity is quiet, normal or verbose; anything else renders as normal.
 	Verbosity string
-	// Mentions maps GitLab usernames to Telegram user ids.
-	Mentions map[string]int64
 	// MaxLen is the message length limit; 0 means DefaultMaxLen. Messages
 	// are truncated to MaxLen-Margin.
 	MaxLen int
 	// ShowDescription includes MR and issue descriptions as an expandable
 	// blockquote (config mr.show_description).
 	ShowDescription bool
-	// Location is the zone for clock times such as "started 14:05"; nil is
-	// UTC.
-	Location *time.Location
 	// Caps decides which in-message operation buttons are drawn; nil draws
 	// none.
 	Caps actions.Capabilities
@@ -90,10 +79,18 @@ func actionButton(text string, cb actions.Callback) (Button, bool) {
 	return Button{Text: text, Data: data}, true
 }
 
-// lead is every card's first block: who (bold handle) did what in which
-// project, in small text, then a separator. verb is the past-tense phrase
-// between the actor and the linked project name, e.g. "pushed to".
-func (o Options) lead(d *htmlfmt.Doc, actor event.User, verb string, p event.Project) {
+// Every card is built from the same kinds of line, in classic Bot API
+// HTML where italic stands in for small text and a blank line for a rule:
+//   - the headline: who (bold handle, never a link) did what in which
+//     project (branch); fixed once posted, no emoji;
+//   - small lines, italic: the detail under it;
+//   - folds, expandable quotes whose bold first line is the label.
+
+// headline writes the card's title, which never changes once the card is
+// posted: lead (who did what, formatted HTML), the preposition, the linked
+// project name, and ref in parentheses when set (formatted HTML):
+// `@ada pushed to demo (feat/x)`. No emoji, ever.
+func headline(b *htmlfmt.Builder, lead, prep string, p event.Project, ref string) {
 	name := p.Name
 	if name == "" {
 		name = p.Path
@@ -102,21 +99,54 @@ func (o Options) lead(d *htmlfmt.Doc, actor event.User, verb string, p event.Pro
 	if p.WebURL != "" {
 		project = htmlfmt.A(name, p.WebURL)
 	}
-	line := htmlfmt.Esc(verb) + " " + project
-	if !actor.IsZero() {
-		line = "<b>" + o.handle(actor) + "</b> " + line
+	line := lead + " " + prep + " " + project
+	if ref != "" {
+		line += " (" + ref + ")"
 	}
-	d.Block(htmlfmt.Footer(line))
-	d.Block(htmlfmt.Divider())
+	b.Line(line)
 }
 
-// updated is the closing footer's timestamp fragment. Renders are pure, so
-// the time is the card's last event time, passed in by the renderer.
-func (o Options) updated(t time.Time) string {
-	if t.IsZero() {
-		return ""
+// tagRef is a tag as a code chip linked to its page.
+func tagRef(p event.Project, tag string) string {
+	chip := htmlfmt.Code(tag)
+	if p.WebURL == "" {
+		return chip
 	}
-	return "Updated " + o.clock(t)
+	return `<a href="` + htmlfmt.Esc(p.WebURL+"/-/tags/"+tag) + `">` + chip + "</a>"
+}
+
+// branchRef is a branch as a code chip linked to its tree.
+func branchRef(p event.Project, branch string) string {
+	chip := htmlfmt.Code(branch)
+	if p.WebURL == "" {
+		return chip
+	}
+	return `<a href="` + htmlfmt.Esc(p.WebURL+"/-/tree/"+branch) + `">` + chip + "</a>"
+}
+
+// who is the actor's handle in bold, "Someone" when the payload names
+// nobody.
+func (o Options) who(u event.User) string {
+	if u.IsZero() {
+		return "Someone"
+	}
+	return "<b>" + o.handle(u) + "</b>"
+}
+
+// small writes an italic detail line; empty inner writes nothing. Italic
+// runs inside inner (handles) are flattened into the line's own italics.
+func small(b *htmlfmt.Builder, inner string) {
+	if inner != "" {
+		b.Line("<i>" + unitalic.Replace(inner) + "</i>")
+	}
+}
+
+var unitalic = strings.NewReplacer("<i>", "", "</i>", "")
+
+// fold writes an expandable quote headed by label in bold. rows is
+// already-formatted HTML, lines separated by newlines.
+func fold(b *htmlfmt.Builder, label, rows string) {
+	b.Quote("<b>"+label+"</b>\n"+rows, true)
 }
 
 func (o Options) limit() int {
@@ -127,19 +157,20 @@ func (o Options) limit() int {
 	return max - Margin
 }
 
-// user renders a user as an italic @handle, a Telegram mention when
-// mapped; the display name in italics when the payload carries no handle.
+// user renders a user as an italic @handle; the display name in italics
+// when the payload carries no handle. Handles are never links.
 func (o Options) user(u event.User) string {
 	return "<i>" + o.handle(u) + "</i>"
 }
 
-// handle is the @handle (or display name) as a mention when mapped.
+// handle is the escaped @handle, or the display name without one. A word
+// joiner after the @ keeps Telegram from detecting the handle as a
+// mention and linking it.
 func (o Options) handle(u event.User) string {
-	name := displayName(u)
 	if u.Username != "" {
-		name = "@" + u.Username
+		return htmlfmt.Esc("@\u2060" + u.Username)
 	}
-	return htmlfmt.Mention(name, htmlfmt.MentionID(o.Mentions, u.Username))
+	return htmlfmt.Esc(displayName(u))
 }
 
 // users renders a user list joined with ", ".
@@ -149,15 +180,6 @@ func (o Options) users(us []event.User) string {
 		parts[i] = o.user(u)
 	}
 	return strings.Join(parts, ", ")
-}
-
-// clock formats a wall-clock time as HH:MM in Options.Location.
-func (o Options) clock(t time.Time) string {
-	loc := o.Location
-	if loc == nil {
-		loc = time.UTC
-	}
-	return t.In(loc).Format("15:04")
 }
 
 func displayName(u event.User) string {

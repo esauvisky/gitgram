@@ -9,38 +9,41 @@ import (
 	"github.com/esauvisky/gitgram/internal/render/htmlfmt"
 )
 
-// Issue renders an issue card.
+// Issue renders an issue card: the title (`@grace opened issue #7 in
+// demo`, fixed once posted), the issue title in small text, who closed
+// it, the description as a fold, and small lines for the people and the
+// last change.
 func Issue(s *cards.IssueState, o Options) Message {
 	var b htmlfmt.Builder
-	emoji := EmojiIssueOpen
-	if s.State == event.IssueStateClosed {
-		emoji = EmojiIssueClosed
+	headline(&b, o.who(s.Author)+" opened issue "+anchorText("#", s.IID, s.URL), "in", s.Project, "")
+
+	title := htmlfmt.Esc(clip(s.Title, maxTitleLen))
+	if s.URL != "" {
+		title = htmlfmt.A(clip(s.Title, maxTitleLen), s.URL)
 	}
-	h := emoji + " "
 	if s.Confidential {
-		h += EmojiLock + " "
+		title += " (confidential)"
 	}
-	b.Line(h + htmlfmt.B("#"+strconv.FormatInt(s.IID, 10)+" "+s.Title))
-	b.Line("by " + o.user(s.Author) + " in " + htmlfmt.A(s.Project.Path, s.Project.WebURL))
-	if o.ShowDescription && strings.TrimSpace(s.Description) != "" {
-		b.Quote(htmlfmt.RewriteMentions(htmlfmt.Esc(strings.TrimSpace(s.Description)), o.Mentions), true)
-	}
-	if len(s.Assignees) > 0 {
-		b.Line(EmojiPeople + " Assignees: " + o.users(s.Assignees))
-	}
-	if len(s.Labels) > 0 {
-		b.Line(EmojiLabel + " " + htmlfmt.Esc(strings.Join(s.Labels, ", ")))
-	}
+	small(&b, title)
 	if s.State == event.IssueStateClosed {
-		l := EmojiIssueClosed + " Closed"
+		l := "Closed"
 		if s.LastChange.Kind == cards.ChangeClosed && !s.LastChange.By.IsZero() {
 			l += " by " + o.user(s.LastChange.By)
 		}
-		b.Line("")
-		b.Line(l)
+		small(&b, l)
 	}
-	if f := changeFooter(s.LastChange, o); f != "" {
-		b.Line(f)
+	if desc := strings.TrimSpace(s.Description); o.ShowDescription && desc != "" {
+		fold(&b, "Description", htmlfmt.RewriteMentions(htmlfmt.Esc(desc)))
 	}
+	var people []string
+	if len(s.Assignees) > 0 {
+		people = append(people, "Assignees "+o.users(s.Assignees))
+	}
+	if len(s.Labels) > 0 {
+		people = append(people, "Labels "+htmlfmt.Esc(strings.Join(s.Labels, ", ")))
+	}
+	small(&b, strings.Join(people, " · "))
+	small(&b, changeFooter(s.LastChange, o))
+	taglineFooter(&b, "issue:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.IID, 10))
 	return Message{HTML: b.Truncate(o.limit(), s.URL)}
 }

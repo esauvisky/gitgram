@@ -30,102 +30,64 @@ func viewPipeline(s *cards.PipelineState) *pipelineView {
 	return &pipelineView{status: s.EffectiveStatus(), jobs: s.SortedJobs(), failed: failed, warned: len(all) > len(failed)}
 }
 
-// Pipeline renders a pipeline card: who ran it in which project, the
-// status line (lamp, anchor, outcome, ref), the commit in small text, a
-// table of stages with their
-// jobs and clock times, one log fold (open on failure, closed while
-// running), and a footer with the artifacts and the last update. A pipeline that a push card absorbs is rendered there instead
-// with the same status line and body.
+// Pipeline renders a pipeline card: the title (`@emi ran pipeline #84 in
+// demo (main)`, fixed once posted), the commit quoted like a push's commit
+// row, one line per stage that carries the result (mark, state, time, the
+// failed job's log under its stage), and after a blank line a small line
+// with the artifacts. A pipeline that a push card
+// absorbs is rendered there instead with the same stage lines.
 func Pipeline(s *cards.PipelineState, o Options) Message {
 	v := viewPipeline(s)
-	var d htmlfmt.Doc
-	o.lead(&d, s.Triggerer, "ran a pipeline in", s.Project)
-	d.Block(htmlfmt.Heading(pipelineStatusLine(s, v), 6))
+	var b htmlfmt.Builder
+	lead := "Pipeline " + pipelineAnchor(s) + " ran"
+	if !s.Triggerer.IsZero() {
+		lead = o.who(s.Triggerer) + " ran pipeline " + pipelineAnchor(s)
+	}
+	ref := ""
+	if s.Ref != "" {
+		ref = branchRef(s.Project, s.Ref)
+		if s.Tag {
+			ref = tagRef(s.Project, s.Ref)
+		}
+	}
+	headline(&b, lead, "in", s.Project, ref)
 	if s.Commit.SHA != "" || s.Commit.Title != "" {
-		d.Block(htmlfmt.Footer(commitFooter(s.Commit, s.Triggerer, o)))
+		b.Quote(commitLine(s.Commit, commitAuthor(s.Commit, s.Triggerer)), false)
 	}
-	pipelineBody(s, v, o, &d)
+	pipelineBody(s, v, o, &b)
 
-	var footer []string
 	if a := artifactsLine(s); a != "" {
-		footer = append(footer, a)
+		b.Line("")
+		small(&b, a)
 	}
-	if u := o.updated(pipelineUpdatedAt(s)); u != "" {
-		footer = append(footer, u)
-	}
-	if len(footer) > 0 {
-		d.Block(htmlfmt.Footer(strings.Join(footer, " · ")))
-	}
-	taglineFooter(&d, "pipeline:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.ID, 10))
-	return Message{Rich: d.String(), Keyboard: pipelineKeyboard(s, v, o)}
+	taglineFooter(&b, "pipeline:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.ID, 10))
+	return Message{HTML: b.Truncate(o.limit(), s.URL), Keyboard: pipelineKeyboard(s, v, o)}
 }
 
-// commitFooter is the small commit line under a pipeline heading: the
-// short sha linked, the title clipped, and who ran it.
-func commitFooter(c event.Commit, who event.User, o Options) string {
-	short := c.SHA
-	if len(short) > 7 {
-		short = short[:7]
-	}
-	sha := htmlfmt.Esc(short)
-	if c.URL != "" {
-		sha = htmlfmt.A(short, c.URL)
-	}
-	l := sha + " " + htmlfmt.Esc(clip(c.Title, maxCommitTitle))
-	if !who.IsZero() {
-		l += " • " + o.user(who)
-	}
-	return l
-}
-
-// pipelineStatusLine is `lamp Pipeline #n <outcome> on <ref>`; cards draw
-// it as a level-6 heading.
-func pipelineStatusLine(s *cards.PipelineState, v *pipelineView) string {
+// pipelineAnchor is `#n`, linked to the pipeline.
+func pipelineAnchor(s *cards.PipelineState) string {
 	num := s.IID
 	if num == 0 {
 		num = s.ID
 	}
-	emoji := statusEmoji(v.status, false)
-	if v.status == event.StatusSuccess && v.warned {
-		emoji = EmojiWarning
-	}
-	line := emoji + " Pipeline " + anchorText("#", num, s.URL) + " " + htmlfmt.Esc(pipelinePhrase(s, v.status, v.warned, v.jobs))
-	if s.Ref != "" {
-		ref := htmlfmt.Code(s.Ref)
-		if s.Tag {
-			ref = EmojiTag + " " + ref
-		}
-		line += " on " + ref
-	}
-	return line
+	return anchorText("#", num, s.URL)
 }
 
-// pipelineBody writes the stage table (or the quiet summary), the
-// downstream line and the log fold.
-func pipelineBody(s *cards.PipelineState, v *pipelineView, o Options, d *htmlfmt.Doc) {
-	jobs := v.jobs
-	switch o.Verbosity {
-	case "quiet":
-		if len(jobs) > 0 {
-			d.P(pipelineSummary(jobs))
-		}
-	default:
-		var rows [][]string
-		for _, st := range groupStages(jobs) {
-			rows = append(rows, stageRows(st)...)
-		}
-		if len(rows) > 0 {
-			d.Block(htmlfmt.Table(rows))
-		}
-		if o.Verbosity == "verbose" && len(jobs) > 0 {
-			var detail []string
-			for _, st := range groupStages(jobs) {
-				detail = append(detail, htmlfmt.B(st.name))
-				for _, j := range st.jobs {
-					detail = append(detail, verboseJob(j))
-				}
-			}
-			d.Block(htmlfmt.Details("Jobs", "<p>"+strings.Join(detail, "<br/>")+"</p>", false))
+// pipelineBody writes, after a blank line, one line per stage in every
+// state of the pipeline:
+// mark, linked name, state, time once finished, and the failed job's log
+// right under a failed stage. Downstream pipelines and the verbose Jobs
+// fold follow.
+func pipelineBody(s *cards.PipelineState, v *pipelineView, o Options, b *htmlfmt.Builder) {
+	stages := groupStages(v.jobs)
+	if len(stages) > 0 {
+		b.Line("")
+	}
+	for _, st := range stages {
+		line, logJob := stageLine(st)
+		b.Line(line)
+		if t, ok := s.Tails[logJob]; ok && logJob != 0 && len(t.Lines) > 0 {
+			b.Line(htmlfmt.Pre(strings.Join(t.Lines, "\n"), "log"))
 		}
 	}
 	if len(s.Children) > 0 {
@@ -133,12 +95,18 @@ func pipelineBody(s *cards.PipelineState, v *pipelineView, o Options, d *htmlfmt
 		for i, c := range s.Children {
 			parts[i] = childLine(c)
 		}
-		d.P(EmojiChild + " Downstream: " + strings.Join(parts, " · "))
+		b.Line("Downstream: " + strings.Join(parts, " · "))
 	}
-	if manual := s.ManualJobs(); o.Verbosity == "quiet" && event.IsBlocked(v.status) && len(manual) > 0 {
-		d.P(EmojiManual + " Waiting for manual: " + htmlfmt.Esc(strings.Join(manual, ", ")))
+	if o.Verbosity == "verbose" && len(v.jobs) > 0 {
+		var detail []string
+		for _, st := range stages {
+			detail = append(detail, htmlfmt.B(st.name))
+			for _, j := range st.jobs {
+				detail = append(detail, verboseJob(j))
+			}
+		}
+		fold(b, "Jobs", strings.Join(detail, "\n"))
 	}
-	logFold(s, v.status, v.failed, jobs, d)
 }
 
 // artifactsLine lists the artifact archives with download links.
@@ -150,7 +118,7 @@ func artifactsLine(s *cards.PipelineState) string {
 	for i, a := range s.Artifacts {
 		parts[i] = htmlfmt.A(a.JobName, s.Project.WebURL+"/-/jobs/"+strconv.FormatInt(a.JobID, 10)+"/artifacts/download") + " " + htmlfmt.Size(a.Size)
 	}
-	return EmojiArtifacts + " Artifacts: " + strings.Join(parts, " · ")
+	return "Artifacts: " + strings.Join(parts, " · ")
 }
 
 // pipelinePhrase is the outcome as a lowercase verb phrase: failed,
@@ -183,47 +151,6 @@ func sentence(s string) string {
 	return string(r)
 }
 
-// pipelineUpdatedAt is the newest time the state knows about.
-func pipelineUpdatedAt(s *cards.PipelineState) time.Time {
-	t := s.LastPipelineEventAt
-	if s.FinishedAt != nil && s.FinishedAt.After(t) {
-		t = *s.FinishedAt
-	}
-	for _, j := range s.Jobs {
-		if j.FinishedAt != nil && j.FinishedAt.After(t) {
-			t = *j.FinishedAt
-		}
-		if j.StartedAt != nil && j.StartedAt.After(t) {
-			t = *j.StartedAt
-		}
-	}
-	return t
-}
-
-// logFold adds the one log block a card carries: the first hard-failed
-// job's tail, open, once the pipeline failed; the running job's tail,
-// closed, while it runs.
-func logFold(s *cards.PipelineState, status string, failed, jobs []cards.JobState, d *htmlfmt.Doc) {
-	if event.IsTerminal(status) {
-		for _, j := range failed {
-			if t, ok := s.Tails[j.ID]; ok && len(t.Lines) > 0 {
-				d.Block(htmlfmt.Details("Error · last lines", htmlfmt.Pre(strings.Join(t.Lines, "\n"), "log"), true))
-				return
-			}
-		}
-		return
-	}
-	for _, j := range jobs {
-		if j.Status != event.StatusRunning {
-			continue
-		}
-		if t, ok := s.Tails[j.ID]; ok && len(t.Lines) > 0 {
-			d.Block(htmlfmt.Details("Logs · current stage", htmlfmt.Pre(strings.Join(t.Lines, "\n"), "log"), false))
-			return
-		}
-	}
-}
-
 // anchorText renders the card's own anchor, linked when the URL is known.
 func anchorText(prefix string, num int64, url string) string {
 	text := prefix + strconv.FormatInt(num, 10)
@@ -252,8 +179,10 @@ func groupStages(jobs []cards.JobState) []stageGroup {
 	return out
 }
 
-// stageEmoji aggregates one stage's job statuses into a single lamp.
-func stageEmoji(jobs []cards.JobState) string {
+// stageState aggregates one stage's job statuses into one state word:
+// running, queued, failed, canceled, manual, scheduled, skipped, warned or
+// passed.
+func stageState(jobs []cards.JobState) string {
 	var running, queued, failed, warned, canceled, manual, scheduled, skipped, success bool
 	for _, j := range jobs {
 		switch st := j.Status; {
@@ -279,86 +208,117 @@ func stageEmoji(jobs []cards.JobState) string {
 	}
 	switch {
 	case running:
-		return EmojiRunning
+		return "running"
 	case queued:
-		return EmojiPending
+		return "queued"
 	case failed:
-		return EmojiFailed
+		return "failed"
 	case canceled:
-		return EmojiCanceled
+		return "canceled"
 	case manual:
-		return EmojiManual
+		return "manual"
 	case scheduled:
-		return EmojiScheduled
+		return "scheduled"
 	case skipped && !success && !warned:
-		return EmojiSkipped
+		return "skipped"
 	case warned && !success:
-		return EmojiWarning
+		return "warned"
 	}
-	return EmojiSuccess
+	return "passed"
 }
 
-// stageRows is one table row per job: the lamp and bold stage name in the
-// first column of the stage's first row only, the job in the middle, and
-// its clock time right-aligned. Failed jobs come first with their reason
-// when it says something; a running job is italic; skipped and canceled
-// jobs are struck through with a dash for a clock.
-func stageRows(st stageGroup) [][]string {
-	jobs := make([]cards.JobState, 0, len(st.jobs))
-	for _, j := range st.jobs {
-		if j.Status == event.StatusFailed && !j.AllowFailure {
-			jobs = append(jobs, j)
-		}
-	}
-	for _, j := range st.jobs {
-		if !(j.Status == event.StatusFailed && !j.AllowFailure) {
-			jobs = append(jobs, j)
-		}
-	}
-	rows := make([][]string, 0, len(jobs))
-	for i, j := range jobs {
-		stage := ""
-		if i == 0 {
-			stage = stageEmoji(st.jobs) + " " + htmlfmt.B(sentence(st.name))
-		}
-		rows = append(rows, []string{stage, jobFragment(j), jobClock(j)})
-	}
-	return rows
+// stageMark is the emoji before a stage for its state.
+func stageMark(state string) string {
+	return stageMarks[state]
 }
 
-// jobClock is a job's run time once it has one; a dash when it never ran.
-func jobClock(j cards.JobState) string {
+// stageLine is one stage: its mark and bold name, linked to the job worth
+// opening (running, else failed, else the first), then what it is doing:
+// `running job x...`, `x failed`, `waiting for x`, `waiting...`, and how
+// long it took once it finished. logJob is the hard-failed job whose log
+// belongs under the line, 0 for none: logs show only on failure.
+func stageLine(st stageGroup) (line string, logJob int64) {
+	var running, failed, manual []cards.JobState
+	for _, j := range st.jobs {
+		switch {
+		case j.Status == event.StatusRunning || j.Status == event.StatusCanceling:
+			running = append(running, j)
+		case j.Status == event.StatusFailed && !j.AllowFailure:
+			failed = append(failed, j)
+		case j.Status == event.StatusManual:
+			manual = append(manual, j)
+		}
+	}
+	target := st.jobs[0]
 	switch {
-	case j.Status == event.StatusSkipped || j.Status == event.StatusCanceled:
-		return "—"
-	case j.Duration != nil && *j.Duration > 0:
-		return htmlfmt.Clock(*j.Duration)
+	case len(running) > 0:
+		target = running[0]
+	case len(failed) > 0:
+		target = failed[0]
 	}
-	return ""
+	name := htmlfmt.Esc(sentence(st.name))
+	if target.URL != "" {
+		name = htmlfmt.A(sentence(st.name), target.URL)
+	}
+	state := stageState(st.jobs)
+	l := stageMark(state) + " <b>" + name + "</b>"
+	switch {
+	case len(running) > 0:
+		word := "job"
+		if len(running) > 1 {
+			word = "jobs"
+		}
+		l += ": running " + word + " " + jobNames(running) + "..."
+	case len(failed) > 0:
+		l += ": " + jobNames(failed) + " failed"
+		if r := failureReason(failed[0]); r != "" {
+			l += " (" + htmlfmt.Esc(r) + ")"
+		}
+		logJob = failed[0].ID
+	case len(manual) > 0:
+		l += ": waiting for " + jobNames(manual)
+	case state == "queued":
+		l += ": waiting..."
+	case state == "skipped", state == "canceled", state == "scheduled":
+		l += ": " + state
+	case state == "warned":
+		l += ": passed with warnings"
+	}
+	if d := stageDuration(st.jobs); d != "" {
+		l += " · " + d
+	}
+	return l, logJob
 }
 
-// jobFragment is one job inside a mixed stage row.
-func jobFragment(j cards.JobState) string {
-	name := htmlfmt.Esc(j.Name)
-	if j.URL != "" {
-		name = htmlfmt.A(j.Name, j.URL)
-	}
-	switch st := j.Status; {
-	case st == event.StatusRunning || st == event.StatusCanceling:
-		return "<i>" + name + "</i>"
-	case st == event.StatusSkipped || st == event.StatusCanceled:
-		return "<s>" + name + "</s>"
-	case st == event.StatusFailed && !j.AllowFailure:
-		if r := failureReason(j); r != "" {
-			return name + " (" + htmlfmt.Esc(r) + ")"
+// stageDuration is the stage's wall time, first start to last finish, once
+// every job in it has finished; empty while any job is still to run or
+// when it never ran.
+func stageDuration(jobs []cards.JobState) string {
+	var first, last *time.Time
+	for _, j := range jobs {
+		if !event.IsTerminal(j.Status) {
+			return ""
 		}
-		return name
-	case st == event.StatusFailed:
-		return name + " (allowed to fail)"
-	case st == event.StatusManual:
-		return name + " (manual)"
+		if j.StartedAt != nil && (first == nil || j.StartedAt.Before(*first)) {
+			first = j.StartedAt
+		}
+		if j.FinishedAt != nil && (last == nil || j.FinishedAt.After(*last)) {
+			last = j.FinishedAt
+		}
 	}
-	return name
+	if first == nil || last == nil {
+		return ""
+	}
+	return htmlfmt.Clock(last.Sub(*first).Seconds())
+}
+
+// jobNames lists jobs as code chips.
+func jobNames(jobs []cards.JobState) string {
+	names := make([]string, len(jobs))
+	for i, j := range jobs {
+		names[i] = htmlfmt.Code(j.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // failureReason is GitLab's reason when it says something; script_failure
@@ -371,10 +331,7 @@ func failureReason(j cards.JobState) string {
 }
 
 func verboseJob(j cards.JobState) string {
-	l := statusEmoji(j.Status, j.AllowFailure) + " " + jobLink(j)
-	if j.Status == event.StatusFailed || j.Status == event.StatusCanceled || j.Status == event.StatusManual || j.Status == event.StatusScheduled || j.Status == event.StatusSkipped {
-		l += " " + strings.ToLower(statusWord(j.Status, j.AllowFailure))
-	}
+	l := jobLink(j) + " " + strings.ToLower(statusWord(j.Status, j.AllowFailure))
 	if j.Duration != nil {
 		l += " · " + htmlfmt.Clock(*j.Duration)
 	}
@@ -388,44 +345,6 @@ func verboseJob(j cards.JobState) string {
 		l += " · retry " + strconv.Itoa(j.Retries)
 	}
 	return l
-}
-
-// pipelineSummary is the quiet mode's one line: job counts by outcome,
-// words only.
-func pipelineSummary(jobs []cards.JobState) string {
-	var passed, failed, warned, skipped, canceled, manual, active int
-	for _, j := range jobs {
-		switch st := j.Status; {
-		case st == event.StatusSuccess:
-			passed++
-		case st == event.StatusFailed && j.AllowFailure:
-			warned++
-		case st == event.StatusFailed:
-			failed++
-		case st == event.StatusSkipped:
-			skipped++
-		case st == event.StatusCanceled:
-			canceled++
-		case event.IsBlocked(st):
-			manual++
-		case event.IsActive(st):
-			active++
-		}
-	}
-	parts := []string{plural(len(jobs), "job")}
-	add := func(n int, label string) {
-		if n > 0 {
-			parts = append(parts, strconv.Itoa(n)+" "+label)
-		}
-	}
-	add(passed, "passed")
-	add(failed, "failed")
-	add(warned, "allowed to fail")
-	add(skipped, "skipped")
-	add(canceled, "canceled")
-	add(manual, "manual")
-	add(active, "in progress")
-	return strings.Join(parts, " · ")
 }
 
 // childLine names a downstream pipeline with its status as a word.
@@ -459,17 +378,53 @@ func jobLink(j cards.JobState) string {
 	return htmlfmt.A(j.Name, j.URL)
 }
 
-// pipelineKeyboard is the one button a card ever carries: Cancel, while
-// the pipeline is active and the bot can cancel it. It disappears with the
-// edit that shows the outcome.
+// pipelineKeyboard is the card's buttons: `Run <job>` for each manual job
+// waiting to be started (up to maxRunButtons), then `Stop pipeline` while
+// the pipeline is active, swapped for `Yes, stop it` and `Keep running`
+// once someone pressed it; `Retry` once it failed.
+// Each needs the bot to be able to write to GitLab.
 func pipelineKeyboard(s *cards.PipelineState, v *pipelineView, o Options) [][]Button {
-	if !event.IsActive(v.status) || !o.can(actions.KindPipeline, actions.ActionCancel) {
+	base := actions.Callback{Kind: actions.KindPipeline, ProjectID: s.Project.ID, ObjectID: s.ID}
+	button := func(text string, a actions.Action) []Button {
+		cb := base
+		cb.Action = a
+		if b, ok := actionButton(text, cb); ok {
+			return []Button{b}
+		}
 		return nil
 	}
-	cb := actions.Callback{Kind: actions.KindPipeline, ProjectID: s.Project.ID, ObjectID: s.ID, Action: actions.ActionCancel}
-	b, ok := actionButton("Cancel", cb)
-	if !ok {
-		return nil
+	var kb [][]Button
+	if o.can(actions.KindJob, actions.ActionPlay) {
+		var runs []Button
+		for _, j := range v.jobs {
+			if j.Status != event.StatusManual || len(runs) == maxRunButtons {
+				continue
+			}
+			cb := actions.Callback{Kind: actions.KindJob, ProjectID: s.Project.ID, ObjectID: j.ID, Action: actions.ActionPlay}
+			if b, ok := actionButton("Run "+j.Name, cb); ok {
+				runs = append(runs, b)
+			}
+		}
+		if len(runs) > 0 {
+			kb = append(kb, runs)
+		}
 	}
-	return [][]Button{{b}}
+	var row []Button
+	switch {
+	case event.IsActive(v.status) && o.can(actions.KindPipeline, actions.ActionCancel):
+		if s.ConfirmStop {
+			row = append(button("Yes, stop it", actions.ActionCancelYes), button("Keep running", actions.ActionCancelNo)...)
+		} else {
+			row = button("Stop pipeline", actions.ActionCancel)
+		}
+	case v.status == event.StatusFailed && o.can(actions.KindPipeline, actions.ActionRetry):
+		row = button("Retry", actions.ActionRetry)
+	}
+	if len(row) > 0 {
+		kb = append(kb, row)
+	}
+	return kb
 }
+
+// maxRunButtons caps the Run buttons for manual jobs on one card.
+const maxRunButtons = 3

@@ -1,45 +1,35 @@
 package render
 
 import (
-	"strings"
+	"strconv"
 
 	"github.com/esauvisky/gitgram/internal/event"
 	"github.com/esauvisky/gitgram/internal/render/htmlfmt"
 )
 
-// Deployment renders a deployment status change.
+// Deployment renders a deployment status change: the title (`@ada
+// deployed to production in demo (develop)`), the state in words, and the
+// commit in small text.
 func Deployment(d *event.Deployment, o Options) Message {
 	var b htmlfmt.Builder
-	env := d.Environment
+	env := htmlfmt.Esc(d.Environment)
 	if d.EnvironmentURL != "" {
 		env = htmlfmt.A(d.Environment, d.EnvironmentURL)
-	} else {
-		env = htmlfmt.Esc(env)
 	}
-	b.Line(EmojiDeploy + " <b>" + env + "</b> · " + deploymentEmoji(d.Status) + " " + deploymentText(d.Status) +
-		" in " + htmlfmt.A(d.Project.Path, d.Project.WebURL))
-
-	var parts []string
+	ref := ""
 	if d.Ref != "" {
-		parts = append(parts, htmlfmt.Code(d.Ref))
+		ref = branchRef(d.Project, d.Ref)
 	}
+	headline(&b, o.who(d.User)+" deployed to "+env, "in", d.Project, ref)
+	small(&b, deploymentText(d.Status))
+
 	if d.Commit.SHA != "" {
-		sha := htmlfmt.ShortSHA(d.Commit.SHA)
-		l := htmlfmt.Code(sha)
-		if d.Commit.URL != "" {
-			l = htmlfmt.A(sha, d.Commit.URL)
-		}
-		if d.Commit.Title != "" {
-			l += " " + htmlfmt.Esc(d.Commit.Title)
-		}
-		parts = append(parts, l)
+		small(&b, commitLine(d.Commit, commitAuthor(d.Commit, d.User)))
 	}
-	if !d.User.IsZero() {
-		parts = append(parts, EmojiUser+" "+o.user(d.User))
+	if d.DeployableURL != "" {
+		small(&b, htmlfmt.A("Deploy job", d.DeployableURL))
 	}
-	if len(parts) > 0 {
-		b.Line(strings.Join(parts, " · "))
-	}
+	taglineFooter(&b, "deployment:"+strconv.FormatInt(d.Project.ID, 10)+":"+strconv.FormatInt(d.ID, 10)+":"+d.Status)
 
 	more := d.DeployableURL
 	if more == "" {
@@ -48,18 +38,19 @@ func Deployment(d *event.Deployment, o Options) Message {
 	return Message{HTML: b.Truncate(o.limit(), more)}
 }
 
+// deploymentText is the deployment's state in words.
 func deploymentText(status string) string {
 	switch status {
 	case event.DeploymentRunning:
-		return "deploying"
+		return "Deploying..."
 	case event.DeploymentSuccess:
-		return "deployed"
+		return "Deployed"
 	case event.DeploymentFailed:
-		return "deployment failed"
+		return "Failed"
 	case event.DeploymentCanceled:
-		return "deployment canceled"
+		return "Canceled"
 	case event.DeploymentBlocked:
-		return "deployment waiting for approval"
+		return "Waiting for approval"
 	}
-	return htmlfmt.Esc(humanize(status))
+	return htmlfmt.Esc(sentence(humanize(status)))
 }

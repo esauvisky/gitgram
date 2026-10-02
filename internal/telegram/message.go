@@ -13,10 +13,7 @@ import (
 // a plain struct literal and outbox payloads written as render.Message JSON
 // unmarshal into it directly.
 type Message struct {
-	// HTML is Bot API HTML for classic messages; Rich is rich message HTML.
-	// Exactly one is set.
 	HTML     string
-	Rich     string `json:",omitempty"`
 	Keyboard [][]Button
 }
 
@@ -33,20 +30,11 @@ type Button struct {
 func (m Message) Hash() string {
 	h := sha256.New()
 	h.Write([]byte(m.HTML))
-	h.Write([]byte(m.Rich))
 	if len(m.Keyboard) > 0 {
 		kb, _ := json.Marshal(m.Keyboard)
 		h.Write(kb)
 	}
 	return hex.EncodeToString(h.Sum(nil))
-}
-
-// rich returns the InputRichMessage for a rich message, nil for classic.
-func (m Message) rich() *models.InputRichMessage {
-	if m.Rich == "" {
-		return nil
-	}
-	return &models.InputRichMessage{HTML: m.Rich, SkipEntityDetection: true}
 }
 
 // replyMarkup converts the keyboard to the bot model; nil when empty so the

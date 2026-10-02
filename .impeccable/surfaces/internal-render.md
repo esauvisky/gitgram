@@ -2,31 +2,23 @@
 version: 1
 slug: "internal-render"
 primary_target: "internal/render"
-related_targets: ["internal/render/pipeline.go","internal/render/mr.go","internal/render/push.go"]
+related_targets: ["internal/render/pipeline.go","internal/render/mr.go","internal/render/push.go","internal/render/issue.go","internal/render/note.go","internal/render/release.go","internal/render/deployment.go"]
 ---
 
-# Surface: Telegram cards (pipeline, MR, push)
+# Surface: Telegram cards (all kinds)
 
-Scope: the live-edited Telegram cards rendered by `internal/render` (pipeline, merge request, push) and their inline keyboards. Visitor mode: Operate.
+Scope: every Telegram message `internal/render` produces: pipeline, merge request, push, branch deleted, tag, issue, note, release, deployment. Visitor mode: Operate.
 
-Audience and job: a developer on a phone or desktop glancing at the team's group chat, scanning for state, then tapping once into GitLab. Proof and content are the real GitLab facts already in card state; nothing is invented.
+Audience and job: a developer glancing at the team group on phone or desktop, reading state, branch, project and person, then following a link into GitLab. Content is the real GitLab facts in card state; nothing is invented.
 
-Constraints: Telegram rich message HTML (Bot API 10.1+: h1-h6, p, table, details/summary, footer, mark, pre with language, blockquote expandable, tg-button with danger/success/primary/link styles) for pipeline, MR and push; classic Bot API HTML for the pending inheritors; 32k characters, both client themes, three verbosity levels, deterministic output for hash-based edit skipping. Engine, store, outbox, reconciler untouched. Note, issue, tag, release and deployment cards inherit the grammar later.
+Constraints: classic Bot API HTML only (b, i, u, s, spoiler, a, tg://user, code, pre with language, blockquote, blockquote expandable), 4096 characters, literal newlines, both client themes, three verbosity levels, deterministic output for hash-skipped edits. No rich message API: no headings, footer, table, details, hr. One callback button, Cancel, while a pipeline is active.
 
-Memorable moment: the first line is a bulletin, not a sentence: one bold status word, one anchor, one number, and nothing else.
-
-Unresolved: short-name collisions between subgroups fall back to `parent/name`; no Threads button because GitLab has no stable discussions anchor.
+Memorable moment: the lead line says who did what where; the bold line under it says what state it is in.
 
 ## Direction contract
-
-THESIS: The user's five mocks are the brief: a small project line, a bold status line whose phrase names what matters (`Pipeline #5981 · Failed in test`, `MR !42 · Merged`, `7 commits pushed`), the object's title, a code chip for the ref, dim footer lines for people and meta, a table of stages with clock times, one collapsible log, folded detail (commits, diff stats, description), and two plain buttons. It refuses the emoji-stat rows and the sentence bots.
-
-OWN-WORLD: Telegram rich messages; status emoji only where the mocks draw them (title line and stage rows); `<footer>` is the small dim text; `<table compact>` aligns clock times right (its cells take inline text only, so the jobs row cannot be a small footer and is plain text with the job names linked); `<details>` folds logs, diff stats and comments; `<code>` chips carry refs, SHAs and file names; buttons are a normal keyboard, two per row, `↗` on links. No bot reactions, no reaction controls.
-
-STORY: the reader sees which project, what happened and where it failed or is running in three lines, then the stages, then the reason, then acts with one of two buttons.
-
-FIRST VIEWPORT: `client / pokemod / agent` small; `❌ Pipeline #5981 · Failed in test` bold; `Fix the SSAID grant`; `feat/ssaid-grant · MR !42`; table `✅ Build 1:02 / assemble`, `❌ Test 1:40 / unit`, `⏭ Deploy — / skipped`; `▾ Error · last lines` open with the log; footer `Ada Lovelace · commit 8f6ded0 · Updated 04:43`; buttons `Open pipeline ↗` `Retry`. Push: `↗ 7 commits pushed`, `feat/ssaid-grant`, `Ada Lovelace`, commits quote, `▸ 3 files changed · +42 −18`, `⏳ Pipeline #5986 queued`, `Compare ↗` `Create MR ↗`. MR: `🟣 MR !42 · Merged`, title, `feat/ssaid-grant → develop`, `Opened by Ada Lovelace`, description quote, `🟣 Merged by Linus into develop`, `✅ Pipeline #5981 passed`, `💬 Discussions resolved`, `Updated 04:43`, `Open MR ↗` `Discussion ↗`.
-
-FORM: user-pinned mocks; the direction roll c1580cc3 was superseded by the pinned brief; code-led.
-
+THESIS: One fixed title per card in the form `@someone did this in repo (branch)`, then only the facts that change underneath it. It refuses status lines, emoji outside the stage marks, SHAs and live logs.
+OWN-WORLD: classic Bot API HTML; the title has a bold handle (word joiner after @, never a link), a linked project and a linked code chip for the ref in parentheses, and is never edited after posting; italic is the small text; expandable quotes are the folds (bold first-line label, or the italic diff stats on push commits); stage lines use one emoji per state with the bold linked stage name, its state in words and its time once finished; only a failed stage gets a `language-log` block under it; commits appear as linked titles, never SHAs; no emoji anywhere; buttons are plain words (Stop pipeline with a Yes, stop it / Keep running confirmation, Retry on failure).
+STORY: who did what where, in one line that never changes; the commits; where the pipeline is or why it failed; a link for everything else.
+FIRST VIEWPORT: `@ada pushed to demo (feat/x)`; the commits quote headed by `3 changed • +42 −18`; a blank line; `✅ Build · 1:02`, `❌ Test: unit failed · 1:40` with its log, `➖ Deploy: skipped`; the Retry button. Pipeline card: `@emi ran pipeline #84 in demo (main)`, the commit quoted, the stage lines, then `Artifacts: …`.
+FORM: user-pinned through iterative direction in the live test group (classic HTML, fixed titles, no emoji, no SHAs, no live logs); no seed roll, pinned brief beats the roll.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
