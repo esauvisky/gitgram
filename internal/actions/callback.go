@@ -24,6 +24,7 @@ type Kind byte
 // Callback kinds.
 const (
 	KindPipeline     Kind = 'p'
+	KindJob          Kind = 'j'
 	KindMergeRequest Kind = 'm'
 	KindIssue        Kind = 'i'
 )
@@ -33,7 +34,14 @@ type Action string
 
 // Actions foreseen for v2. Capabilities decides which are offered.
 const (
-	ActionCancel  Action = "cancel"
+	// ActionCancel asks to stop a pipeline; the card then offers
+	// ActionCancelYes (stop it) and ActionCancelNo (keep it running).
+	ActionCancel    Action = "cancel"
+	ActionCancelYes Action = "cancelyes"
+	ActionCancelNo  Action = "cancelno"
+	ActionRetry     Action = "retry"
+	// ActionPlay starts a manual job (KindJob, ObjectID is the job id).
+	ActionPlay    Action = "play"
 	ActionApprove Action = "approve"
 	ActionMerge   Action = "merge"
 	ActionRefresh Action = "refresh"

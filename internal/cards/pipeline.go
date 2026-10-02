@@ -44,6 +44,10 @@ type PipelineState struct {
 	Triggerer event.User
 	Commit    event.Commit
 
+	// ConfirmStop is set while someone pressed Stop and the card is asking
+	// to confirm; cleared by the answer or a retry.
+	ConfirmStop bool
+
 	// MR is set for merge request pipelines.
 	MR *event.MRRef
 	// Parent is set for child pipelines.
