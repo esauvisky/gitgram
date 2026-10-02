@@ -6,15 +6,8 @@ type EventClass string
 
 // Event classes accepted in `events:` lists and `threads:` keys.
 const (
-	EventPush       EventClass = "push"
-	EventTag        EventClass = "tag"
-	EventPipeline   EventClass = "pipeline"
-	EventMR         EventClass = "mr"
-	EventMRNote     EventClass = "mr_note"
-	EventIssue      EventClass = "issue"
-	EventIssueNote  EventClass = "issue_note"
-	EventRelease    EventClass = "release"
-	EventDeployment EventClass = "deployment"
+	EventPush     EventClass = "push"
+	EventPipeline EventClass = "pipeline"
 )
 
 // ThreadDefault is the `threads:` key used when no per-class thread is set.
@@ -22,10 +15,7 @@ const ThreadDefault = "default"
 
 // AllEventClasses lists every event class in a stable order. It is the
 // built-in value of `defaults.events`.
-var AllEventClasses = []EventClass{
-	EventPush, EventTag, EventPipeline, EventMR, EventMRNote,
-	EventIssue, EventIssueNote, EventRelease, EventDeployment,
-}
+var AllEventClasses = []EventClass{EventPush, EventPipeline}
 
 // Valid reports whether c is one of the known event classes.
 func (c EventClass) Valid() bool {

@@ -88,17 +88,6 @@ func (u rawUser) event() event.User {
 	return event.User{ID: u.ID, Username: u.Username, Name: u.Name, AvatarURL: u.AvatarURL}
 }
 
-func users(raw []rawUser) []event.User {
-	if len(raw) == 0 {
-		return nil
-	}
-	out := make([]event.User, len(raw))
-	for i, u := range raw {
-		out[i] = u.event()
-	}
-	return out
-}
-
 // rawCommit is the commit object in push, pipeline, MR (last_commit) and
 // release payloads.
 type rawCommit struct {
@@ -149,34 +138,6 @@ type rawLabel struct {
 	Title string `json:"title"`
 }
 
-func labels(raw []rawLabel) []string {
-	if len(raw) == 0 {
-		return nil
-	}
-	out := make([]string, len(raw))
-	for i, l := range raw {
-		out[i] = l.Title
-	}
-	return out
-}
-
-// rawChanges is the changes{} map of MR and issue payloads.
-type rawChanges map[string]struct {
-	Previous json.RawMessage `json:"previous"`
-	Current  json.RawMessage `json:"current"`
-}
-
-func (c rawChanges) event() map[string]event.Change {
-	if len(c) == 0 {
-		return nil
-	}
-	out := make(map[string]event.Change, len(c))
-	for k, v := range c {
-		out[k] = event.Change{Previous: v.Previous, Current: v.Current}
-	}
-	return out
-}
-
 // rawSourcePipeline is source_pipeline{} in pipeline and job payloads.
 type rawSourcePipeline struct {
 	Project struct {
@@ -199,55 +160,6 @@ func (s *rawSourcePipeline) event() *event.PipelineRef {
 		PipelineID:    s.PipelineID,
 		JobID:         s.JobID,
 	}
-}
-
-// rawMRRef is the merge_request{} sibling object in pipeline and note
-// payloads.
-type rawMRRef struct {
-	ID             int64  `json:"id"`
-	IID            int64  `json:"iid"`
-	Title          string `json:"title"`
-	URL            string `json:"url"`
-	SourceBranch   string `json:"source_branch"`
-	TargetBranch   string `json:"target_branch"`
-	State          string `json:"state"`
-	Draft          bool   `json:"draft"`
-	WorkInProgress bool   `json:"work_in_progress"`
-}
-
-func (m *rawMRRef) event(project event.Project) *event.MRRef {
-	if m == nil || (m.ID == 0 && m.IID == 0) {
-		return nil
-	}
-	url := m.URL
-	if url == "" {
-		url = fmt.Sprintf("%s/-/merge_requests/%d", project.WebURL, m.IID)
-	}
-	return &event.MRRef{
-		ID: m.ID, IID: m.IID, Title: m.Title, URL: url,
-		SourceBranch: m.SourceBranch, TargetBranch: m.TargetBranch,
-		State: m.State, Draft: m.Draft || m.WorkInProgress,
-	}
-}
-
-// rawIssueRef is the issue{} sibling object in note payloads.
-type rawIssueRef struct {
-	ID    int64  `json:"id"`
-	IID   int64  `json:"iid"`
-	Title string `json:"title"`
-	URL   string `json:"url"`
-	State string `json:"state"`
-}
-
-func (i *rawIssueRef) event(project event.Project) *event.IssueRef {
-	if i == nil || (i.ID == 0 && i.IID == 0) {
-		return nil
-	}
-	url := i.URL
-	if url == "" {
-		url = fmt.Sprintf("%s/-/issues/%d", project.WebURL, i.IID)
-	}
-	return &event.IssueRef{ID: i.ID, IID: i.IID, Title: i.Title, URL: url, State: i.State}
 }
 
 // decode unmarshals body into v with a kind-tagged error.

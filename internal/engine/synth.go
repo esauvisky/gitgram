@@ -29,7 +29,6 @@ func synthPipeline(st *cards.PipelineState, p *api.Pipeline, jobs []api.Job, now
 		FinishedAt: p.FinishedAt,
 		Duration:   p.Duration,
 		Commit:     st.Commit,
-		MR:         st.MR,
 		Parent:     st.Parent,
 	}
 	if ev.Commit.SHA == "" && len(jobs) > 0 && jobs[0].Commit != nil {
@@ -70,55 +69,6 @@ func synthPipeline(st *cards.PipelineState, p *api.Pipeline, jobs []api.Job, now
 	return ev
 }
 
-// synthMR builds a Merge Request Hook equivalent from the REST merge
-// request. The action reflects the API state: merge or close when the MR
-// left the opened state, otherwise an update with no changes so LastChange
-// is preserved.
-func synthMR(st *cards.MRState, mr *api.MR, now time.Time) *event.MergeRequest {
-	ev := &event.MergeRequest{
-		Meta:                        event.Meta{Received: now},
-		Project:                     st.Project,
-		Action:                      event.MRActionUpdate,
-		ID:                          mr.ID,
-		IID:                         mr.IID,
-		Title:                       mr.Title,
-		Description:                 mr.Description,
-		URL:                         mr.WebURL,
-		State:                       mr.State,
-		Draft:                       mr.Draft,
-		SourceBranch:                mr.SourceBranch,
-		TargetBranch:                mr.TargetBranch,
-		Author:                      apiUser(mr.Author),
-		Assignees:                   apiUsers(mr.Assignees),
-		Labels:                      mr.Labels,
-		DetailedMergeStatus:         mr.DetailedMergeStatus,
-		BlockingDiscussionsResolved: mr.BlockingDiscussionsResolved,
-		MergedAt:                    mr.MergedAt,
-		CreatedAt:                   mr.CreatedAt,
-		UpdatedAt:                   mr.UpdatedAt,
-	}
-	ev.Reviewers = make([]event.Reviewer, len(mr.Reviewers))
-	for i, r := range mr.Reviewers {
-		ev.Reviewers[i] = event.Reviewer{User: apiUser(r)}
-	}
-	if mr.HeadPipeline != nil {
-		id := mr.HeadPipeline.ID
-		ev.HeadPipelineID = &id
-	}
-	switch mr.State {
-	case event.MRStateMerged:
-		ev.Action = event.MRActionMerge
-		if mr.MergeUser != nil {
-			u := apiUser(*mr.MergeUser)
-			ev.User = u
-			ev.MergedBy = &u
-		}
-	case event.MRStateClosed:
-		ev.Action = event.MRActionClose
-	}
-	return ev
-}
-
 func apiUser(u api.User) event.User {
 	return event.User{ID: u.ID, Username: u.Username, Name: u.Name, AvatarURL: u.AvatarURL}
 }
@@ -128,17 +78,6 @@ func apiUserPtr(u *api.User) event.User {
 		return event.User{}
 	}
 	return apiUser(*u)
-}
-
-func apiUsers(us []api.User) []event.User {
-	if len(us) == 0 {
-		return nil
-	}
-	out := make([]event.User, len(us))
-	for i, u := range us {
-		out[i] = apiUser(u)
-	}
-	return out
 }
 
 func apiCommit(c api.Commit) event.Commit {

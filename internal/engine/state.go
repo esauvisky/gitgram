@@ -13,17 +13,12 @@ import (
 
 // Object link relations stored in object_links.
 const (
-	relHeadPipeline = "head_pipeline" // mr → pipeline
-	relChild        = "child"         // parent pipeline → child pipeline
-	relPushPipeline = "pipeline"      // push → pipeline for its (branch, sha)
+	relChild        = "child"    // parent pipeline → child pipeline
+	relPushPipeline = "pipeline" // push → pipeline for its (branch, sha)
 )
 
 func skey(k cards.Key) store.Key {
 	return store.Key{Kind: string(k.Kind), ProjectID: k.ProjectID, ObjectID: k.ObjectID}
-}
-
-func ckey(k store.Key) cards.Key {
-	return cards.Key{Kind: cards.Kind(k.Kind), ProjectID: k.ProjectID, ObjectID: k.ObjectID}
 }
 
 // load reads the state behind key into a fresh T. row is nil when the object

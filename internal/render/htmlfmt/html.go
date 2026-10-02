@@ -35,9 +35,6 @@ func Pre(text, lang string) string {
 	return `<pre><code class="language-` + Esc(lang) + `">` + Esc(text) + "</code></pre>"
 }
 
-// S wraps escaped text in strikethrough.
-func S(text string) string { return "<s>" + Esc(text) + "</s>" }
-
 // Code renders inline code.
 func Code(text string) string { return "<code>" + Esc(text) + "</code>" }
 

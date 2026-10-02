@@ -6,22 +6,13 @@ type Kind string
 
 // Event kinds.
 const (
-	KindPush         Kind = "push"
-	KindTagPush      Kind = "tag_push"
-	KindPipeline     Kind = "pipeline"
-	KindJob          Kind = "job"
-	KindMergeRequest Kind = "merge_request"
-	KindNote         Kind = "note"
-	KindIssue        Kind = "issue"
-	KindRelease      Kind = "release"
-	KindDeployment   Kind = "deployment"
+	KindPush     Kind = "push"
+	KindPipeline Kind = "pipeline"
+	KindJob      Kind = "job"
 )
 
 // Kinds lists every kind in a stable order.
-var Kinds = []Kind{
-	KindPush, KindTagPush, KindPipeline, KindJob, KindMergeRequest,
-	KindNote, KindIssue, KindRelease, KindDeployment,
-}
+var Kinds = []Kind{KindPush, KindPipeline, KindJob}
 
 // String returns the kind as a string.
 func (k Kind) String() string { return string(k) }

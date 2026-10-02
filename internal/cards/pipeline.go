@@ -48,8 +48,6 @@ type PipelineState struct {
 	// to confirm; cleared by the answer or a retry.
 	ConfirmStop bool
 
-	// MR is set for merge request pipelines.
-	MR *event.MRRef
 	// Parent is set for child pipelines.
 	Parent *event.PipelineRef
 	// Children summarises child pipelines, sorted by ID. Maintained by the

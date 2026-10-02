@@ -104,7 +104,6 @@ type Settings struct {
 	Verbosity string           `yaml:"verbosity"` // quiet | normal | verbose
 	Branches  Branches         `yaml:"branches"`
 	Pipelines Pipelines        `yaml:"pipelines"`
-	MR        MR               `yaml:"mr"`
 	Push      Push             `yaml:"push"`
 	Threads   map[string]int64 `yaml:"threads"`
 }
@@ -130,13 +129,6 @@ type Pipelines struct {
 // gitlab.read_token.
 type LogTail struct {
 	Lines *int `yaml:"lines"`
-}
-
-// MR tunes merge request cards.
-type MR struct {
-	CollapseNotes   *bool `yaml:"collapse_notes"`
-	ShowDescription *bool `yaml:"show_description"`
-	ShowSystemNotes *bool `yaml:"show_system_notes"`
 }
 
 // Push tunes push summaries.
@@ -229,15 +221,6 @@ func (c *Config) applyDefaults() {
 	}
 	if d.Pipelines.LogTail.Lines == nil {
 		d.Pipelines.LogTail.Lines = ptr(10)
-	}
-	if d.MR.CollapseNotes == nil {
-		d.MR.CollapseNotes = ptr(false)
-	}
-	if d.MR.ShowDescription == nil {
-		d.MR.ShowDescription = ptr(true)
-	}
-	if d.MR.ShowSystemNotes == nil {
-		d.MR.ShowSystemNotes = ptr(false)
 	}
 	if d.Push.MaxCommits == nil {
 		d.Push.MaxCommits = ptr(10)

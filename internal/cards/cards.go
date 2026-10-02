@@ -18,8 +18,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"time"
-
-	"github.com/esauvisky/gitgram/internal/event"
 )
 
 // SchemaVer is the current layout version of every state type. Stored
@@ -32,8 +30,6 @@ type Kind string
 // Card kinds.
 const (
 	KindPipeline Kind = "pipeline"
-	KindMR       Kind = "mr"
-	KindIssue    Kind = "issue"
 	KindPush     Kind = "push"
 )
 
@@ -44,40 +40,6 @@ type Key struct {
 	Kind      Kind
 	ProjectID int64
 	ObjectID  int64
-}
-
-// ChangeKind names the last notable change recorded on an MR or issue card
-// so the renderer can show "labels changed by X" without a side channel.
-type ChangeKind string
-
-// Change kinds recorded in LastChange.
-const (
-	ChangeOpened          ChangeKind = "opened"
-	ChangeReopened        ChangeKind = "reopened"
-	ChangeClosed          ChangeKind = "closed"
-	ChangeMerged          ChangeKind = "merged"
-	ChangeApproved        ChangeKind = "approved"
-	ChangeUnapproved      ChangeKind = "unapproved"
-	ChangeDraft           ChangeKind = "draft"
-	ChangeReady           ChangeKind = "ready"
-	ChangeTitle           ChangeKind = "title"
-	ChangeDescription     ChangeKind = "description"
-	ChangeLabels          ChangeKind = "labels"
-	ChangeAssignees       ChangeKind = "assignees"
-	ChangeReviewers       ChangeKind = "reviewers"
-	ChangeThreadsResolved ChangeKind = "threads_resolved"
-	ChangeTargetBranch    ChangeKind = "target_branch"
-	ChangeMilestone       ChangeKind = "milestone"
-	ChangeConfidential    ChangeKind = "confidential"
-	ChangeDueDate         ChangeKind = "due_date"
-)
-
-// Change records the last notable change on an MR or issue.
-type Change struct {
-	Kind ChangeKind
-	// At is the receive time of the event that carried the change.
-	At time.Time
-	By event.User
 }
 
 // snapshot serialises a state so reducers can detect whether they changed
@@ -91,13 +53,6 @@ func snapshot(v any) []byte {
 }
 
 func differs(before []byte, v any) bool { return !bytes.Equal(before, snapshot(v)) }
-
-func sameUser(a, b event.User) bool {
-	if a.ID != 0 || b.ID != 0 {
-		return a.ID == b.ID
-	}
-	return a.Username == b.Username
-}
 
 func timePtr(t time.Time) *time.Time {
 	if t.IsZero() {

@@ -18,7 +18,6 @@ var (
 
 const (
 	pipelineID = 991001
-	mrIID      = 42
 	issueIID   = 7
 	sha        = "8f6ded00c0ffee1234567890abcdef1234567890"
 )
@@ -98,25 +97,12 @@ func (r *Runner) pipeline(status string, jobs ...event.Job) *event.Pipeline {
 	p := &event.Pipeline{Meta: meta(), Project: r.proj, User: ada, ID: pipelineID, IID: 318, URL: r.proj.WebURL + "/-/pipelines/" + itoa(pipelineID),
 		Ref: "feat/ssaid-grant", SHA: sha, Source: "push", Status: status, Stages: []string{"build", "test", "deploy"},
 		CreatedAt: time.Now().Add(-4 * time.Minute), Commit: r.commit("signals: send the SSAID as the grant subject"),
-		MR:   &event.MRRef{IID: mrIID, URL: r.proj.WebURL + "/-/merge_requests/" + itoa(mrIID), SourceBranch: "feat/ssaid-grant", TargetBranch: "develop"},
 		Jobs: jobs}
 	if event.IsTerminal(status) {
 		p.FinishedAt = ptrT(time.Now())
 		p.Duration = ptrI(234)
 	}
 	return p
-}
-
-func (r *Runner) mr(action, state string, actor event.User, mut func(*event.MergeRequest)) *event.MergeRequest {
-	m := &event.MergeRequest{Meta: meta(), Project: r.proj, User: actor, Action: action, ID: 9900042, IID: mrIID,
-		Title: "signals: send the SSAID as the grant subject when it's known", Description: "Fixes the grant subject and bumps the injectors to 17.19.0.\n\nAlso: @grace please check the tappable fix.",
-		URL: r.proj.WebURL + "/-/merge_requests/" + itoa(mrIID), State: state, SourceBranch: "feat/ssaid-grant", TargetBranch: "develop",
-		Author: ada, Reviewers: []event.Reviewer{{User: grace}, {User: linus}}, Labels: []string{"client", "release"},
-		DetailedMergeStatus: "mergeable", LastCommit: r.commit("signals: send the SSAID as the grant subject"), CreatedAt: time.Now()}
-	if mut != nil {
-		mut(m)
-	}
-	return m
 }
 
 func (r *Runner) push(ref, before, after string, forced bool, commits ...event.Commit) *event.Push {
@@ -168,7 +154,7 @@ var scenarios = []Scenario{
 		},
 		func(ctx context.Context, r *Runner) error {
 			p := r.pipeline(event.StatusPending, r.job(31, "assemble", "build", event.StatusCreated, 0), r.job(32, "unit", "test", event.StatusCreated, 0))
-			p.ID, p.IID, p.Ref, p.MR = pipelineID+3, 321, "feat/tappable-fix", nil
+			p.ID, p.IID, p.Ref = pipelineID+3, 321, "feat/tappable-fix"
 			for i := range p.Jobs {
 				p.Jobs[i].PipelineID, p.Jobs[i].Ref = p.ID, "feat/tappable-fix"
 			}
@@ -176,7 +162,7 @@ var scenarios = []Scenario{
 		},
 		func(ctx context.Context, r *Runner) error {
 			p := r.pipeline(event.StatusSuccess, r.job(31, "assemble", "build", event.StatusSuccess, 62), r.job(32, "unit", "test", event.StatusSuccess, 100))
-			p.ID, p.IID, p.Ref, p.MR = pipelineID+3, 321, "feat/tappable-fix", nil
+			p.ID, p.IID, p.Ref = pipelineID+3, 321, "feat/tappable-fix"
 			for i := range p.Jobs {
 				p.Jobs[i].PipelineID, p.Jobs[i].Ref = p.ID, "feat/tappable-fix"
 			}
@@ -222,7 +208,7 @@ var scenarios = []Scenario{
 			lint.AllowFailure = true
 			p := r.pipeline(event.StatusSuccess, r.job(11, "assemble", "build", event.StatusSuccess, 62), lint,
 				r.job(13, "unit", "test", event.StatusSuccess, 100), r.job(14, "deploy:prod", "deploy", event.StatusSuccess, 30))
-			p.ID, p.IID, p.MR = pipelineID+1, 319, nil
+			p.ID, p.IID = pipelineID+1, 319
 			p.Ref, p.Tag = "v13.5.0", true
 			for i := range p.Jobs {
 				p.Jobs[i].PipelineID = p.ID
@@ -237,7 +223,7 @@ var scenarios = []Scenario{
 		func(ctx context.Context, r *Runner) error {
 			p := r.pipeline(event.StatusManual, r.job(21, "assemble", "build", event.StatusSuccess, 62), r.job(22, "unit", "test", event.StatusSuccess, 100),
 				r.job(23, "deploy:prod", "deploy", event.StatusManual, 0), r.job(24, "deploy:cdn", "deploy", event.StatusManual, 0))
-			p.ID, p.IID, p.MR = pipelineID+2, 320, nil
+			p.ID, p.IID = pipelineID+2, 320
 			for i := range p.Jobs {
 				p.Jobs[i].PipelineID = p.ID
 				p.Jobs[i].Manual = p.Jobs[i].Status == event.StatusManual
@@ -245,84 +231,6 @@ var scenarios = []Scenario{
 			return r.handle(ctx, p)
 		},
 	}},
-	{Name: "mr", About: "a merge request opened, approved by a reviewer, then merged by someone else", Steps: []Step{
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, r.mr(event.MRActionOpen, event.MRStateOpened, ada, func(m *event.MergeRequest) {
-				id := int64(pipelineID)
-				m.HeadPipelineID = &id
-			}))
-		},
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, r.mr(event.MRActionApproved, event.MRStateOpened, grace, nil))
-		},
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, r.mr(event.MRActionMerge, event.MRStateMerged, linus, func(m *event.MergeRequest) {
-				m.MergedBy, m.MergedAt = &linus, ptrT(time.Now())
-			}))
-		},
-	}},
-	{Name: "mr-note", About: "a comment replying to the merge request card", Steps: []Step{
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, &event.Note{Meta: meta(), Project: r.proj, User: grace, ID: 9900501, NoteableType: event.NoteableMergeRequest,
-				Body: "Tappable fix looks right, but please keep the SSAID fallback.", URL: r.proj.WebURL + "/-/merge_requests/" + itoa(mrIID) + "#note_9900501",
-				Action: event.NoteActionCreate, IsDiff: true, FilePath: "src/catch.kt", Line: 42,
-				MR: &event.MRRef{IID: mrIID, Title: "signals: send the SSAID as the grant subject when it's known", URL: r.proj.WebURL + "/-/merge_requests/" + itoa(mrIID), TargetBranch: "develop"}})
-		},
-	}},
-	{Name: "mr-draft", About: "a draft merge request opened, then closed", Steps: []Step{
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, r.mr(event.MRActionOpen, event.MRStateOpened, linus, func(m *event.MergeRequest) {
-				m.ID, m.IID, m.Draft, m.Title, m.Reviewers, m.Labels, m.Description = 9900043, mrIID+1, true, "prod update 0.431.0", nil, nil, "supported versions: 0.431.0"
-				m.URL = r.proj.WebURL + "/-/merge_requests/" + itoa(mrIID+1)
-				m.Author = linus
-			}))
-		},
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, r.mr(event.MRActionClose, event.MRStateClosed, ada, func(m *event.MergeRequest) {
-				m.ID, m.IID, m.Draft, m.Title, m.Reviewers, m.Labels, m.Description = 9900043, mrIID+1, true, "prod update 0.431.0", nil, nil, "supported versions: 0.431.0"
-				m.URL = r.proj.WebURL + "/-/merge_requests/" + itoa(mrIID+1)
-				m.Author = linus
-			}))
-		},
-	}},
-	{Name: "issue", About: "an issue opened, then closed", Steps: []Step{
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, &event.Issue{Meta: meta(), Project: r.proj, User: grace, Action: event.IssueActionOpen, ID: 9900700, IID: issueIID,
-				Title: "Catch screen not tappable after injector restart", Description: "Repro: restart the injector while a catch is open.", URL: r.proj.WebURL + "/-/issues/" + itoa(issueIID),
-				State: event.IssueStateOpened, Author: grace, Assignees: []event.User{ada}, Labels: []string{"bug"}, CreatedAt: time.Now()})
-		},
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, &event.Issue{Meta: meta(), Project: r.proj, User: ada, Action: event.IssueActionClose, ID: 9900700, IID: issueIID,
-				Title: "Catch screen not tappable after injector restart", URL: r.proj.WebURL + "/-/issues/" + itoa(issueIID),
-				State: event.IssueStateClosed, Author: grace, Assignees: []event.User{ada}, Labels: []string{"bug"}, ClosedAt: ptrT(time.Now())})
-		},
-	}},
-	{Name: "tag", About: "a tag pushed", Steps: []Step{
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, &event.TagPush{Meta: meta(), Project: r.proj, User: ada, Ref: "refs/tags/v13.5.0", Before: event.ZeroSHA, After: sha, CheckoutSHA: sha, Message: "13.5.0: SSAID grant subject"})
-		},
-	}},
-	{Name: "release", About: "a release created", Steps: []Step{
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, &event.Release{Meta: meta(), Project: r.proj, Action: event.ReleaseActionCreate, ID: 9900900, Name: "13.5.0", Tag: "v13.5.0",
-				Description: "SSAID grant subject, injectors 17.19.0.", URL: r.proj.WebURL + "/-/releases/v13.5.0", Commit: r.commit("bump version to 13.5.0-001"),
-				Links: []event.Link{{Name: "apk", URL: r.proj.WebURL + "/-/releases/v13.5.0/downloads/app.apk"}}, CreatedAt: time.Now(), ReleasedAt: time.Now()})
-		},
-	}},
-	{Name: "deployment", About: "a deployment running, then succeeded", Steps: []Step{
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, r.deployment(event.DeploymentRunning))
-		},
-		func(ctx context.Context, r *Runner) error {
-			return r.handle(ctx, r.deployment(event.DeploymentSuccess))
-		},
-	}},
-}
-
-func (r *Runner) deployment(status string) *event.Deployment {
-	return &event.Deployment{Meta: meta(), Project: r.proj, User: ada, ID: 9901100, Status: status, StatusChangedAt: time.Now(),
-		DeployableID: 4, DeployableURL: r.proj.WebURL + "/-/jobs/4", Environment: "production", EnvironmentURL: "https://app.example.com", EnvironmentTier: "production",
-		Ref: "develop", Commit: r.commit("signals: send the SSAID as the grant subject")}
 }
 
 func itoa(i int64) string {

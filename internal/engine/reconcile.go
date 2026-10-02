@@ -54,16 +54,6 @@ func (e *Engine) reconcile(ctx context.Context) {
 		}
 		e.reconcilePipeline(ctx, row)
 	}
-	rows, err = e.st.ListNonFinal(ctx, string(cards.KindMR), stale)
-	if err != nil {
-		e.log.Error("reconcile: list merge requests", "err", err)
-	}
-	for _, row := range rows {
-		if ctx.Err() != nil {
-			return
-		}
-		e.reconcileMR(ctx, row)
-	}
 }
 
 func (e *Engine) reconcilePipeline(ctx context.Context, row store.ObjectRow) {
@@ -85,23 +75,6 @@ func (e *Engine) reconcilePipeline(ctx context.Context, row store.ObjectRow) {
 		return
 	}
 	e.applySynthetic(ctx, synthPipeline(&st, p, jobs, time.Now()), enrichment{})
-}
-
-func (e *Engine) reconcileMR(ctx context.Context, row store.ObjectRow) {
-	var st cards.MRState
-	if err := json.Unmarshal(row.StateJSON, &st); err != nil {
-		e.log.Error("reconcile: corrupt mr state", "key", row.Key, "err", err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(ctx, reconcileTimeout)
-	defer cancel()
-	mr, err := e.api.MergeRequest(ctx, row.ProjectID, row.ObjectID)
-	if err != nil {
-		e.reconcileFetchError(ctx, row, err)
-		return
-	}
-	en := e.enrichMR(ctx, st.Project.Path, row.ProjectID, row.ObjectID)
-	e.applySynthetic(ctx, synthMR(&st, mr, time.Now()), en)
 }
 
 // reconcileFetchError logs a failed fetch. An object GitLab no longer knows

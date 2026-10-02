@@ -57,9 +57,6 @@ type Options struct {
 	// MaxLen is the message length limit; 0 means DefaultMaxLen. Messages
 	// are truncated to MaxLen-Margin.
 	MaxLen int
-	// ShowDescription includes MR and issue descriptions as an expandable
-	// blockquote (config mr.show_description).
-	ShowDescription bool
 	// Caps decides which in-message operation buttons are drawn; nil draws
 	// none.
 	Caps actions.Capabilities
@@ -157,12 +154,6 @@ func (o Options) limit() int {
 	return max - Margin
 }
 
-// user renders a user as an italic @handle; the display name in italics
-// when the payload carries no handle. Handles are never links.
-func (o Options) user(u event.User) string {
-	return "<i>" + o.handle(u) + "</i>"
-}
-
 // handle is the escaped @handle, or the display name without one. A word
 // joiner after the @ keeps Telegram from detecting the handle as a
 // mention and linking it.
@@ -171,15 +162,6 @@ func (o Options) handle(u event.User) string {
 		return htmlfmt.Esc("@\u2060" + u.Username)
 	}
 	return htmlfmt.Esc(displayName(u))
-}
-
-// users renders a user list joined with ", ".
-func (o Options) users(us []event.User) string {
-	parts := make([]string, len(us))
-	for i, u := range us {
-		parts[i] = o.user(u)
-	}
-	return strings.Join(parts, ", ")
 }
 
 func displayName(u event.User) string {
@@ -194,15 +176,6 @@ func displayName(u event.User) string {
 
 // humanize turns a snake_case status into words.
 func humanize(s string) string { return strings.ReplaceAll(s, "_", " ") }
-
-// clip shortens text to max runes, ending in an ellipsis when it cut.
-func clip(text string, max int) string {
-	r := []rune(text)
-	if len(r) <= max {
-		return text
-	}
-	return strings.TrimRight(string(r[:max-1]), " ") + "…"
-}
 
 // plural returns "n word" or "n words".
 func plural(n int, word string) string {

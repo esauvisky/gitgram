@@ -57,21 +57,6 @@ func (q queries) EnqueueSend(ctx context.Context, threadID *int64, payload []byt
 	return nil
 }
 
-// EnqueueReply queues a pre-rendered message to be sent as a reply to the
-// card identified by anchor.
-func (q queries) EnqueueReply(ctx context.Context, anchor Key, threadID *int64, payload []byte) error {
-	now := time.Now()
-	_, err := q.db.ExecContext(ctx,
-		`INSERT INTO outbox
-		   (thread_id, op, card_kind, card_project_id, card_object_id, payload, not_before, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		nullInt(threadID), OpReply, anchor.Kind, anchor.ProjectID, anchor.ObjectID, payload, now.UnixMilli(), now.Unix())
-	if err != nil {
-		return fmt.Errorf("enqueue reply to %v: %w", anchor, err)
-	}
-	return nil
-}
-
 // OutboxHead returns the oldest outbox row regardless of not_before (the
 // sender waits until it is due), or nil, nil when the outbox is empty.
 func (q queries) OutboxHead(ctx context.Context) (*OutboxRow, error) {

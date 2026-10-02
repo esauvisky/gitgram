@@ -8,7 +8,7 @@
 
 ---
 
-Gitgram is a self-hosted bot that takes every project under one gitlab.com group and turns its webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run. A merge request is **one message** that tracks approvals, threads, conflicts and its pipeline. Comments reply to the card they belong to, so the group chat reads like a timeline instead of a log file.
+Gitgram is a self-hosted bot that takes every project under one gitlab.com group and turns its webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. Today it covers pushes and pipelines; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
 
 It exists because [Integram](https://github.com/requilence/integram) was archived, GitLab's built-in Telegram integration sends one flat line per event and calls it a day, and every other bot on GitHub either stopped in 2022 or only does DMs.
 
@@ -18,15 +18,12 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 
 - **Pipeline cards**: pending → running → done, edited in place. Stage rows, job names, failed jobs with log links, durations, "waiting for manual job" states, child pipelines folded into the parent. Retries don't spawn a new card, they update the old one.
 - **Failure logs**: when a job fails, the last 10 lines of its log appear under its stage, syntax-coloured. Running and passed jobs show no log, just the stage line and, once finished, how long it took. Needs `gitlab.read_token`.
-- **Artifacts**: every archive the jobs produced, linked with its size, once the pipeline ends.
-- **One layout for every card**, in plain Telegram HTML that any client renders: a title that never changes once posted, `@someone did this in repo (branch)` (`@ada pushed to agent (feat/x)`, `@emi ran pipeline #84 in agent (main)`), italic detail lines, one line per pipeline stage (`✅ Build · 1:02`, `🏃 Deploy: running job x...`, `❌ Test: unit failed · 1:40` with the failed log under it), and expandable quotes for commits, descriptions and comments. Emoji only as stage marks.
-- **Stop and Retry**: a running pipeline carries `Stop pipeline`, which asks `Yes, stop it` / `Keep running` before canceling; a failed one carries `Retry`, no questions asked. Needs `gitlab.hooks_token`; anyone in the group may press. Everything else is a link in the text.
-- **Merge request cards**: state, draft flag, assignees, reviewers, labels, approvals (N/M when the API allows it), unresolved thread count, head pipeline status, conflicts, and a merged/closed footer. Comments reply to the card; or fold them in with `collapse_notes` if your team comments like it's paid by the word.
-- **Issue cards** with replying comments.
-- **Push cards**: `@ada pushed to agent (feat/x)`, the commits in one quote, the diff stats in italics as the first line of the commits quote (`3 changed, 1 deleted • +42 −18`), and the pipeline for that push as it moves from queued to passed or failed, all edited in place. A newer push to the same branch gets its own card and marks the old one superseded. Branch created and deleted, and a force-push badge (detected via the API, because GitLab doesn't tell you).
-- **Tags, releases, deployments** as plain messages with links.
-- **Handles, not pings**: people show as italic `@gitlab-user`, including `@mentions` inside descriptions and comments. Nothing links to a Telegram account, so a card never notifies anyone.
-- **Forum topics**: route pipelines, MRs and pushes to their own topics.
+- **Artifacts**: every archive a stage's jobs produced, linked with its size at the end of the stage's line, once the pipeline ends.
+- **One layout for every card**, in plain Telegram HTML that any client renders: a title that never changes once posted, `@someone did this in repo (branch)` (`@ada pushed to agent (feat/x)`, `@emi ran pipeline #84 in agent (main)`), italic detail lines, one line per pipeline stage (`✅ Build · 1:02`, `🏃 Deploy: running job x...`, `❌ Test: unit failed · 1:40` with the failed log under it), and an expandable quote for the commits. Emoji only as stage marks.
+- **Stop, Retry and Run**: a running pipeline carries `Stop pipeline`, which asks `Yes, stop it` / `Keep running` before canceling; a failed one carries `Retry`, no questions asked; a manual job waiting to start gets `Run <job>`. Needs `gitlab.hooks_token`; anyone in the group may press. Everything else is a link in the text.
+- **Push cards**: `@ada pushed to agent (feat/x)`, the commits in one quote as `author: title`, closed by the line counts (`+23, -46 lines on 4 files`), and the pipeline that push triggered, all edited in place. A newer push to the same branch gets its own card. Branch created and deleted, and a force-push warning (detected via the API, because GitLab doesn't tell you).
+- **Handles, not pings**: people show as bold `@gitlab-user` that never links to a Telegram account, so a card never notifies anyone.
+- **Forum topics**: route pipelines and pushes to their own topics.
 - **Reconciler**: cards that stopped receiving events get re-read from the GitLab API. GitLab does not retry failed webhook deliveries, ever, so somebody has to.
 - **`sync-hooks`**: registers the webhook on every project in the group, or one group hook if you pay for Premium.
 - Everything else is a tap away through the links in the card; there are no link buttons.
@@ -96,18 +93,15 @@ Pin a version with `VERSION=0.1.0 docker compose up -d`. To build locally instea
 | `gitlab.webhook_secret` | required | `X-Gitlab-Token` value |
 | `storage.path` | `/data/gitgram.db` | SQLite file |
 | `logging.level` / `logging.format` | `info` / `text` | slog level; `text` or `json` |
-| `defaults.events` | all | subset of `push tag pipeline mr mr_note issue issue_note release deployment` |
+| `defaults.events` | all | subset of `push pipeline` |
 | `defaults.verbosity` | `normal` | `quiet` (final state only), `normal`, `verbose` (per-job lines, queued time) |
 | `defaults.branches.allow` / `.deny` | `["*"]` / `[]` | globs (`release/*`) or `re:` regexps; deny wins |
 | `defaults.pipelines.child_cards` | `inline` | `inline` (in parent card), `own`, `both` |
 | `defaults.pipelines.quiet_success` | `true` | with `quiet`: stay silent on success |
 | `defaults.pipelines.log_tail.lines` | `10` | log lines shown for a failed job; `0` disables them |
-| `defaults.mr.collapse_notes` | `false` | fold comments into the MR card instead of replying |
-| `defaults.mr.show_description` | `true` | description as an expandable quote |
-| `defaults.mr.show_system_notes` | `false` | relay GitLab system notes |
 | `defaults.push.max_commits` | `10` | commits listed per push |
 | `projects[]` | | `path: group/project` plus any `defaults` key and `threads` |
-| `users` | | `gitlab_username: telegram_user_id` for mentions |
+| `users` | | `gitlab_username: telegram_user_id`; unused while cards never mention people |
 
 Events from projects outside `gitlab.group` are ignored unless listed in `projects[]`.
 
@@ -116,11 +110,11 @@ Events from projects outside `gitlab.group` are ignored unless listed in `projec
 - **Free tier**: `gitgram sync-hooks` walks every non-archived project under the group and creates or updates a project hook. Re-run it when projects are added. `--dry-run` shows the plan.
 - **Premium/Ultimate**: `gitgram sync-hooks --group-hook` registers a single group webhook. Don't do both; every event arrives twice and you get to pay for deduplicating it.
 
-Endpoint: `POST <public_base_url>/webhook/gitlab`. Events to enable: Push, Tag push, Issues, Confidential issues, Comments, Confidential comments, Merge request, Job, Pipeline, Deployment, Release.
+Endpoint: `POST <public_base_url>/webhook/gitlab`. Events to enable: Push, Job, Pipeline. Other events are accepted and ignored.
 
 ## How cards behave
 
-- Every pipeline, MR, issue and push owns exactly one Telegram message. Events update stored state; a single sender renders the latest state and edits the message. Identical renders are skipped by hash, so Telegram never sees "message is not modified" and you never see a pointless edit.
+- Every pipeline and push owns exactly one Telegram message. Events update stored state; a single sender renders the latest state and edits the message. Identical renders are skipped by hash, so Telegram never sees "message is not modified" and you never see a pointless edit.
 - Edits are debounced 700 ms: a burst of job events becomes one edit. First send and final state go out immediately.
 - Telegram allows about 20 messages per minute per group, and edits count. The sender rate-limits (1/s, 20/min) and honours `retry_after`. A busy pipeline can delay other messages; it cannot drop them.
 - Cards whose message was deleted by a human are marked and left alone. The bot does not resurrect things.
@@ -129,7 +123,19 @@ Endpoint: `POST <public_base_url>/webhook/gitlab`. Events to enable: Push, Tag p
 
 ## Preview
 
-`gitgram preview --config config.yaml` sends a mock card of every kind and scenario to the configured chat: pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, a passing and a manual pipeline, a merge request opened → approved → merged with a reply, a draft closed, an issue, a tag, a release and a deployment. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview --config /config/config.yaml`. Pick scenarios with `--scenario pipeline,mr` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview pipeline mr`.
+`gitgram preview --config config.yaml` sends a mock card of every kind and scenario to the configured chat: pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, and a passing and a manual pipeline. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview --config /config/config.yaml`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
+
+## Not supported yet
+
+These GitLab events were supported before the card redesign and need cards in the new layout before they come back. Until then the bot ignores them and `sync-hooks` no longer subscribes to them.
+
+- [ ] Merge request cards (opened, draft, merged, closed; approvals, reviewers, threads, conflicts, head pipeline)
+- [ ] Merge request comments, replying to the MR card
+- [ ] Issue cards (opened, closed, confidential, assignees, labels)
+- [ ] Issue comments, replying to the issue card
+- [ ] Tag pushes
+- [ ] Releases
+- [ ] Deployments
 
 ## Operations
 

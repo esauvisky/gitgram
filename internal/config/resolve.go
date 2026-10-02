@@ -13,7 +13,6 @@ type EffectiveProject struct {
 	Verbosity string
 	Branches  Branches
 	Pipelines PipelineSettings
-	MR        MRSettings
 	Push      PushSettings
 	Threads   map[string]int64 // project-level thread overrides only
 
@@ -25,13 +24,6 @@ type PipelineSettings struct {
 	ChildCards   string
 	QuietSuccess bool
 	LogTailLines int
-}
-
-// MRSettings is the resolved `mr:` block.
-type MRSettings struct {
-	CollapseNotes   bool
-	ShowDescription bool
-	ShowSystemNotes bool
 }
 
 // PushSettings is the resolved `push:` block.
@@ -51,11 +43,6 @@ func (c *Config) Resolve(projectPath string) EffectiveProject {
 		Pipelines: PipelineSettings{
 			ChildCards: d.Pipelines.ChildCards, QuietSuccess: *d.Pipelines.QuietSuccess,
 			LogTailLines: *d.Pipelines.LogTail.Lines,
-		},
-		MR: MRSettings{
-			CollapseNotes:   *d.MR.CollapseNotes,
-			ShowDescription: *d.MR.ShowDescription,
-			ShowSystemNotes: *d.MR.ShowSystemNotes,
 		},
 		Push: PushSettings{MaxCommits: *d.Push.MaxCommits},
 		cfg:  c,
@@ -90,15 +77,6 @@ func (p *EffectiveProject) apply(s *Settings) {
 	}
 	if s.Pipelines.LogTail.Lines != nil {
 		p.Pipelines.LogTailLines = *s.Pipelines.LogTail.Lines
-	}
-	if s.MR.CollapseNotes != nil {
-		p.MR.CollapseNotes = *s.MR.CollapseNotes
-	}
-	if s.MR.ShowDescription != nil {
-		p.MR.ShowDescription = *s.MR.ShowDescription
-	}
-	if s.MR.ShowSystemNotes != nil {
-		p.MR.ShowSystemNotes = *s.MR.ShowSystemNotes
 	}
 	if s.Push.MaxCommits != nil {
 		p.Push.MaxCommits = *s.Push.MaxCommits

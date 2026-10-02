@@ -130,26 +130,6 @@ func stageArtifacts(s *cards.PipelineState, st stageGroup) string {
 	return " <i>(" + strings.Join(parts, " · ") + ")</i>"
 }
 
-// pipelinePhrase is the outcome as a lowercase verb phrase: failed,
-// passed, running, waiting for manual, queued, canceled, skipped.
-func pipelinePhrase(s *cards.PipelineState, status string, warned bool, jobs []cards.JobState) string {
-	switch {
-	case status == event.StatusFailed:
-		return "failed"
-	case status == event.StatusSuccess && warned:
-		return "passed with warnings"
-	case status == event.StatusSuccess:
-		return "passed"
-	case status == event.StatusRunning || status == event.StatusCanceling:
-		return "running"
-	case event.IsBlocked(status):
-		return "waiting for manual"
-	case event.IsActive(status):
-		return "queued"
-	}
-	return strings.ToLower(statusWord(status, false))
-}
-
 // sentence capitalises the first letter of a phrase.
 func sentence(s string) string {
 	if s == "" {

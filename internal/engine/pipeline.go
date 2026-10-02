@@ -43,9 +43,6 @@ func (e *Engine) applyPipeline(ctx context.Context, tx *store.Tx, eff config.Eff
 	if err := put(ctx, tx, key, st, st.Final, latest(row, ev.ReceivedAt())); err != nil {
 		return err
 	}
-	if err := e.linkPipelineMRs(ctx, tx, key, st); err != nil {
-		return err
-	}
 
 	ownCard := true
 	if parentKey, ok := st.ChildKey(); ok {
@@ -95,60 +92,6 @@ func (e *Engine) enqueuePipelineCard(ctx context.Context, tx *store.Tx, eff conf
 		}
 	}
 	return e.enqueueCard(ctx, tx, key, eff.ThreadFor(config.EventPipeline), card, st.Final)
-}
-
-// linkPipelineMRs records the mr → head_pipeline link when the payload names
-// a merge request, then refreshes the head pipeline summary on every merge
-// request linked to this pipeline (from the payload or from earlier MR
-// events) and enqueues their cards. A merge request already showing or
-// expecting a newer pipeline is left alone. Child pipelines are never an
-// MR's head pipeline; their status reaches the MR card through the parent.
-func (e *Engine) linkPipelineMRs(ctx context.Context, tx *store.Tx, key cards.Key, st *cards.PipelineState) error {
-	if st.Parent != nil {
-		return nil
-	}
-	var mrKeys []cards.Key
-	if st.MR != nil {
-		mk := cards.Key{Kind: cards.KindMR, ProjectID: st.Project.ID, ObjectID: st.MR.IID}
-		if err := tx.AddLink(ctx, store.Link{From: skey(mk), Rel: relHeadPipeline, To: skey(key)}); err != nil {
-			return err
-		}
-		mrKeys = append(mrKeys, mk)
-	}
-	links, err := tx.LinksTo(ctx, skey(key), relHeadPipeline)
-	if err != nil {
-		return err
-	}
-	for _, l := range links {
-		if mk := ckey(l.From); !slices.Contains(mrKeys, mk) {
-			mrKeys = append(mrKeys, mk)
-		}
-	}
-	summary := st.PipelineSummary()
-	for _, mk := range mrKeys {
-		mr, row, err := load[cards.MRState](ctx, tx, mk, e.log)
-		if err != nil {
-			return err
-		}
-		if row == nil || mr.HeadPipelineID > st.ID || (mr.HeadPipeline != nil && mr.HeadPipeline.ID > st.ID) {
-			continue
-		}
-		if !mr.SetHeadPipeline(summary) {
-			continue
-		}
-		if err := put(ctx, tx, mk, mr, mr.Final, row.LastEventAt); err != nil {
-			return err
-		}
-		card, err := tx.GetCard(ctx, skey(mk))
-		if err != nil {
-			return err
-		}
-		meff := e.cfg.Resolve(mr.Project.Path)
-		if err := e.enqueueCard(ctx, tx, mk, meff.ThreadFor(config.EventMR), card, mr.Final); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // updateParent upserts the child's summary into its parent pipeline and

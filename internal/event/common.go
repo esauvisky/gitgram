@@ -1,7 +1,6 @@
 package event
 
 import (
-	"encoding/json"
 	"time"
 )
 
@@ -47,28 +46,6 @@ type Commit struct {
 	Timestamp time.Time
 }
 
-// MRRef is a lightweight pointer to a merge request carried by pipeline and
-// note payloads.
-type MRRef struct {
-	ID           int64
-	IID          int64
-	Title        string
-	URL          string
-	SourceBranch string
-	TargetBranch string
-	State        string
-	Draft        bool
-}
-
-// IssueRef is a lightweight pointer to an issue carried by note payloads.
-type IssueRef struct {
-	ID    int64
-	IID   int64
-	Title string
-	URL   string
-	State string
-}
-
 // PipelineRef points to the parent pipeline of a child pipeline
 // (source_pipeline in pipeline and job payloads).
 type PipelineRef struct {
@@ -78,18 +55,4 @@ type PipelineRef struct {
 	PipelineID    int64
 	// JobID is the trigger (bridge) job in the parent pipeline.
 	JobID int64
-}
-
-// Change is one entry of the changes{} map in MR and issue payloads. Both
-// sides are kept raw because their shape depends on the key (strings,
-// booleans, arrays of label or user objects, timestamps).
-type Change struct {
-	Previous json.RawMessage
-	Current  json.RawMessage
-}
-
-// Link is a named URL (release asset links).
-type Link struct {
-	Name string
-	URL  string
 }

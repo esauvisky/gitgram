@@ -112,7 +112,7 @@ func (s *Sender) process(run context.Context, item *OutboxItem) {
 	switch item.Op {
 	case OpCard:
 		err = s.processCard(ctx, run, item)
-	case OpSend, OpReply:
+	case OpSend:
 		err = s.processSend(ctx, run, item)
 	default:
 		s.log.Error("outbox: unknown op, dropping", "id", item.ID, "op", item.Op)
@@ -197,7 +197,7 @@ func (s *Sender) processCard(ctx, run context.Context, item *OutboxItem) error {
 // tgErr is the Telegram failure, err a store failure.
 func (s *Sender) deliverCard(ctx, run context.Context, chat int64, card *Card, msg Message, thread *int64, hash, kind string, pid, oid int64) (tgErr, err error) {
 	if card.MessageID == nil {
-		sent, usedThread, tgErr := s.send(ctx, run, chat, msg, thread, nil)
+		sent, usedThread, tgErr := s.send(ctx, run, chat, msg, thread)
 		if tgErr != nil {
 			return tgErr, nil
 		}
@@ -222,10 +222,7 @@ func (s *Sender) deliverCard(ctx, run context.Context, chat int64, card *Card, m
 	return nil, s.outbox.SetCardHash(ctx, chat, kind, pid, oid, hash)
 }
 
-// processSend posts the row payload in every chat it has not reached yet;
-// an OpReply row replies to the anchor card's message in each chat (in the
-// topic that message lives in) and goes out standalone where the anchor
-// has no message.
+// processSend posts the row payload in every chat it has not reached yet.
 func (s *Sender) processSend(ctx, run context.Context, item *OutboxItem) error {
 	var msg Message
 	if err := json.Unmarshal(item.Payload, &msg); err != nil {
@@ -242,18 +239,7 @@ func (s *Sender) processSend(ctx, run context.Context, item *OutboxItem) error {
 		if i > 0 {
 			thread = nil
 		}
-		var reply *models.ReplyParameters
-		if item.Op == OpReply {
-			card, err := s.outbox.GetCard(ctx, chat, item.CardKind, item.CardProjectID, item.CardObjectID)
-			if err != nil {
-				return err
-			}
-			if card != nil && card.MessageID != nil {
-				reply = &models.ReplyParameters{MessageID: *card.MessageID, AllowSendingWithoutReply: true}
-				thread = card.ThreadID
-			}
-		}
-		if _, _, tgErr := s.send(ctx, run, chat, msg, thread, reply); tgErr != nil {
+		if _, _, tgErr := s.send(ctx, run, chat, msg, thread); tgErr != nil {
 			if run.Err() != nil {
 				return nil
 			}
@@ -289,7 +275,7 @@ func (s *Sender) finish(ctx context.Context, item *OutboxItem, retry time.Durati
 // send posts msg to chat, retrying once without the thread when Telegram
 // reports the topic missing, closed or deleted. Each attempt takes a
 // rate-limiter slot. It returns the thread actually used.
-func (s *Sender) send(ctx, run context.Context, chat int64, msg Message, threadID *int64, reply *models.ReplyParameters) (*models.Message, *int64, error) {
+func (s *Sender) send(ctx, run context.Context, chat int64, msg Message, threadID *int64) (*models.Message, *int64, error) {
 	thread := 0
 	if threadID != nil {
 		thread = int(*threadID)
@@ -298,7 +284,7 @@ func (s *Sender) send(ctx, run context.Context, chat int64, msg Message, threadI
 		return s.client.bot.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: chat, MessageThreadID: thread, Text: msg.HTML, ParseMode: models.ParseModeHTML,
 			LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: bot.True()},
-			ReplyParameters:    reply, ReplyMarkup: msg.replyMarkup(),
+			ReplyMarkup:        msg.replyMarkup(),
 		})
 	}
 	if err := s.limiter.wait(run); err != nil {

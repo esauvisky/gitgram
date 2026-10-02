@@ -24,12 +24,6 @@ func (e *Engine) Render(kind string, stateJSON []byte, _ *int64) (telegram.Messa
 			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
 		}
 		msg = render.Pipeline(&s, e.options(e.cfg.Resolve(s.Project.Path)))
-	case cards.KindMR:
-		var s cards.MRState
-		if err := json.Unmarshal(stateJSON, &s); err != nil {
-			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
-		}
-		msg = render.MergeRequest(&s, e.options(e.cfg.Resolve(s.Project.Path)))
 	case cards.KindPush:
 		var s cards.PushState
 		if err := json.Unmarshal(stateJSON, &s); err != nil {
@@ -37,12 +31,6 @@ func (e *Engine) Render(kind string, stateJSON []byte, _ *int64) (telegram.Messa
 		}
 		eff := e.cfg.Resolve(s.Project.Path)
 		msg = render.Push(&s, eff.Push.MaxCommits, e.options(eff))
-	case cards.KindIssue:
-		var s cards.IssueState
-		if err := json.Unmarshal(stateJSON, &s); err != nil {
-			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
-		}
-		msg = render.Issue(&s, e.options(e.cfg.Resolve(s.Project.Path)))
 	default:
 		return telegram.Message{}, fmt.Errorf("render: unknown card kind %q", kind)
 	}
@@ -57,9 +45,8 @@ func (e *Engine) options(eff config.EffectiveProject) render.Options {
 		caps = e
 	}
 	return render.Options{
-		Verbosity:       eff.Verbosity,
-		Caps:            caps,
-		ShowDescription: eff.MR.ShowDescription,
+		Verbosity: eff.Verbosity,
+		Caps:      caps,
 	}
 }
 

@@ -51,22 +51,3 @@ func parsePush(body []byte, meta event.Meta) (event.Event, error) {
 		TotalCommitsCount: raw.TotalCommitsCount,
 	}, nil
 }
-
-func parseTagPush(body []byte, meta event.Meta) (event.Event, error) {
-	var raw rawPush
-	if err := decode(body, kindTagPush, &raw); err != nil {
-		return nil, err
-	}
-	return &event.TagPush{
-		Meta:              meta,
-		Project:           raw.project(),
-		User:              raw.user(),
-		Ref:               raw.Ref,
-		Before:            raw.Before,
-		After:             raw.After,
-		CheckoutSHA:       raw.CheckoutSHA,
-		Message:           raw.Message,
-		Commits:           commits(raw.Commits),
-		TotalCommitsCount: raw.TotalCommitsCount,
-	}, nil
-}

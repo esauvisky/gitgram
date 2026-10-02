@@ -135,23 +135,23 @@ func commitAuthor(c event.Commit, actor event.User) string {
 	return c.Author.Name
 }
 
-// TagPush renders a tag pushed or deleted: the headline naming the tag and
-// the commit it points at, and the annotation as a fold.
-func TagPush(t *event.TagPush, o Options) Message {
-	var b htmlfmt.Builder
-	tag := htmlfmt.Code(t.Tag())
-	if t.IsDelete() {
-		headline(&b, o.who(t.User)+" deleted a tag", "in", t.Project, tag)
-		return Message{HTML: b.String()}
+// pipelineLine is the small pipeline line on a push card whose pipeline
+// has a card of its own:
+// `Pipeline #n word [· N failed] [· N manual]`.
+func pipelineLine(p *cards.PipelineSummary) string {
+	num := p.IID
+	if num == 0 {
+		num = p.ID
 	}
-	url := t.Project.WebURL + "/-/tags/" + t.Tag()
-	if t.Project.WebURL != "" {
-		tag = `<a href="` + htmlfmt.Esc(url) + `">` + tag + "</a>"
+	l := "Pipeline " + anchorText("#", num, p.URL) + " " + strings.ToLower(statusWord(p.Status, false))
+	if event.IsActive(p.Status) && p.Status != event.StatusRunning {
+		l = "Pipeline " + anchorText("#", num, p.URL) + " queued"
 	}
-	headline(&b, o.who(t.User)+" pushed a tag", "to", t.Project, tag)
-	if msg := strings.TrimSpace(t.Message); msg != "" {
-		fold(&b, "Message", htmlfmt.RewriteMentions(htmlfmt.Esc(msg)))
+	if p.Failed > 0 && p.Status != event.StatusFailed {
+		l += " · " + strconv.Itoa(p.Failed) + " failed"
 	}
-	taglineFooter(&b, "tag:"+strconv.FormatInt(t.Project.ID, 10)+":"+t.Tag()+":"+t.CheckoutSHA)
-	return Message{HTML: b.Truncate(o.limit(), url)}
+	if p.Manual > 0 && p.Status != event.StatusManual {
+		l += " · " + strconv.Itoa(p.Manual) + " manual"
+	}
+	return l
 }

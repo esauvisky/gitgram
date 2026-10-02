@@ -7,9 +7,8 @@ import (
 
 // Outbox ops, matching the outbox.op column.
 const (
-	OpSend  = "send"
-	OpReply = "reply"
-	OpCard  = "card"
+	OpSend = "send"
+	OpCard = "card"
 )
 
 // Card statuses, matching card_messages.status.
@@ -23,21 +22,21 @@ const (
 type OutboxItem struct {
 	ID       int64
 	ThreadID *int64
-	// Op is OpSend, OpReply or OpCard.
+	// Op is OpSend or OpCard.
 	Op string
 	// CardKind/CardProjectID/CardObjectID are the card target for OpCard and
-	// the reply anchor for OpReply. Empty for OpSend.
+	// empty for OpSend.
 	CardKind      string
 	CardProjectID int64
 	CardObjectID  int64
-	// Payload is Message JSON for OpSend and OpReply; nil for OpCard.
+	// Payload is Message JSON for OpSend; nil for OpCard.
 	Payload   []byte
 	NotBefore time.Time
 	Attempts  int
 	// Generation is the row's coalesce counter at read time; DeleteOutbox
 	// only removes the row if it is still the same.
 	Generation int64
-	// SentChats lists the chats an OpSend or OpReply row already reached.
+	// SentChats lists the chats an OpSend row already reached.
 	SentChats []int64
 }
 
@@ -62,7 +61,7 @@ type Outbox interface {
 	// DeleteOutbox removes a processed or abandoned row, unless its
 	// generation changed since it was read (the row then stays queued).
 	DeleteOutbox(ctx context.Context, id, generation int64) error
-	// MarkOutboxSent records that an OpSend or OpReply row is done in chatID.
+	// MarkOutboxSent records that an OpSend row is done in chatID.
 	MarkOutboxSent(ctx context.Context, id, chatID int64) error
 
 	// GetCard returns the card's message in chatID. In the primary chat nil

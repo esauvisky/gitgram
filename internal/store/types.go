@@ -43,15 +43,13 @@ type CardRow struct {
 
 // Outbox operations.
 const (
-	OpSend  = "send"
-	OpReply = "reply"
-	OpCard  = "card"
+	OpSend = "send"
+	OpCard = "card"
 )
 
 // OutboxRow is one pending sender job. For OpCard, Card is the card to
-// render and send/edit and Payload is nil; for OpReply, Card is the anchor
-// whose message the reply targets; for OpSend, Card is nil. Payload holds
-// the pre-rendered message JSON for send and reply.
+// render and send/edit and Payload is nil; for OpSend, Card is nil and
+// Payload holds the pre-rendered message JSON.
 type OutboxRow struct {
 	ID        int64
 	ThreadID  *int64

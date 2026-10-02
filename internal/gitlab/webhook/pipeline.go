@@ -41,7 +41,6 @@ type rawPipeline struct {
 		QueuedDuration *int     `json:"queued_duration"`
 		URL            string   `json:"url"`
 	} `json:"object_attributes"`
-	MergeRequest   *rawMRRef          `json:"merge_request"`
 	User           rawUser            `json:"user"`
 	Project        rawProject         `json:"project"`
 	Commit         rawCommit          `json:"commit"`
@@ -79,7 +78,6 @@ func parsePipeline(body []byte, meta event.Meta) (event.Event, error) {
 		Duration:       oa.Duration,
 		QueuedDuration: oa.QueuedDuration,
 		Commit:         commit,
-		MR:             raw.MergeRequest.event(project),
 		Parent:         parent,
 	}
 	if p.URL == "" {

@@ -70,10 +70,6 @@ func (e *Engine) Handle(ctx context.Context, deliveryKey string, ev event.Event)
 		log.Debug("branch filtered", "ref", ref)
 		return nil
 	}
-	if n, ok := ev.(*event.Note); ok && n.System && !eff.MR.ShowSystemNotes {
-		log.Debug("system note skipped")
-		return nil
-	}
 
 	en := e.prefetch(ctx, ev)
 
@@ -104,57 +100,29 @@ func (e *Engine) apply(ctx context.Context, tx *store.Tx, eff config.EffectivePr
 	switch v := ev.(type) {
 	case *event.Pipeline, *event.Job:
 		return e.applyPipeline(ctx, tx, eff, ev, en)
-	case *event.MergeRequest:
-		return e.applyMR(ctx, tx, eff, v, en)
-	case *event.Note:
-		return e.applyNote(ctx, tx, eff, v)
-	case *event.Issue:
-		return e.applyIssue(ctx, tx, eff, v)
 	case *event.Push:
 		if v.IsDelete() {
 			return e.applyBranchDeleted(ctx, tx, eff, v)
 		}
 		return e.applyPush(ctx, tx, eff, v, en)
-	case *event.TagPush, *event.Release, *event.Deployment:
-		return e.applyOneShot(ctx, tx, eff, ev)
 	}
 	e.log.Warn("unhandled event type", "kind", ev.EventKind())
 	return nil
 }
 
-// classOf maps an event to its config event class. Notes on commits and
-// snippets have no class and are not relayed.
+// classOf maps an event to its config event class.
 func classOf(ev event.Event) (config.EventClass, bool) {
-	switch v := ev.(type) {
+	switch ev.(type) {
 	case *event.Push:
 		return config.EventPush, true
-	case *event.TagPush:
-		return config.EventTag, true
 	case *event.Pipeline, *event.Job:
 		return config.EventPipeline, true
-	case *event.MergeRequest:
-		return config.EventMR, true
-	case *event.Note:
-		switch v.NoteableType {
-		case event.NoteableMergeRequest:
-			return config.EventMRNote, v.MR != nil
-		case event.NoteableIssue:
-			return config.EventIssueNote, v.Issue != nil
-		}
-		return "", false
-	case *event.Issue:
-		return config.EventIssue, true
-	case *event.Release:
-		return config.EventRelease, true
-	case *event.Deployment:
-		return config.EventDeployment, true
 	}
 	return "", false
 }
 
-// filterRef returns the ref the branch allow/deny filter applies to, when
-// the event has one: push and pipeline/job refs, and the target branch for
-// merge requests and their notes.
+// filterRef returns the ref the branch allow/deny filter applies to: push
+// and pipeline/job refs.
 func filterRef(ev event.Event) (string, bool) {
 	switch v := ev.(type) {
 	case *event.Push:
@@ -163,12 +131,6 @@ func filterRef(ev event.Event) (string, bool) {
 		return v.Ref, true
 	case *event.Job:
 		return v.Ref, true
-	case *event.MergeRequest:
-		return v.TargetBranch, true
-	case *event.Note:
-		if v.MR != nil && v.MR.TargetBranch != "" {
-			return v.MR.TargetBranch, true
-		}
 	}
 	return "", false
 }

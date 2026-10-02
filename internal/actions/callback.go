@@ -23,10 +23,8 @@ type Kind byte
 
 // Callback kinds.
 const (
-	KindPipeline     Kind = 'p'
-	KindJob          Kind = 'j'
-	KindMergeRequest Kind = 'm'
-	KindIssue        Kind = 'i'
+	KindPipeline Kind = 'p'
+	KindJob      Kind = 'j'
 )
 
 // Action names what the button does.

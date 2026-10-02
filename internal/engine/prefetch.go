@@ -15,13 +15,10 @@ import (
 // slow GitLab API never pushes the webhook response past GitLab's 10 s.
 const prefetchTimeout = 5 * time.Second
 
-// enrichment carries REST data fetched before the transaction for merge
-// request events. Zero when the API is unavailable or a call failed.
+// enrichment carries REST data fetched before the transaction for push,
+// pipeline and job events. Zero when the API is unavailable or a call
+// failed.
 type enrichment struct {
-	approvals  *api.Approvals
-	unresolved int
-	// threads is true when unresolved holds a fetched value.
-	threads bool
 	// tails holds final log tails for hard-failed jobs named by a pipeline
 	// or job event, fetched here because a pipeline that fails in the same
 	// delivery is final at once and the tail loop never visits it.
@@ -56,8 +53,6 @@ func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 		}
 		v.Forced = len(cmp.Commits) > 0
 		return enrichment{diff: diffStatsReversed(cmp)}
-	case *event.MergeRequest:
-		return e.enrichMR(ctx, v.Project.Path, v.Project.ID, v.IID)
 	case *event.Pipeline:
 		en := e.enrichFailedTails(ctx, v.Project, v.ID, v.Jobs)
 		if event.IsTerminal(v.Status) {
@@ -110,24 +105,6 @@ func (e *Engine) enrichFailedTails(ctx context.Context, project event.Project, p
 	return en
 }
 
-// diffStats derives stats from forward diffs (an MR's changes).
-func diffStats(diffs []api.Diff) *cards.DiffStats {
-	d := &cards.DiffStats{FilesChanged: len(diffs)}
-	for i, f := range diffs {
-		a, r := f.LineCounts()
-		d.Added += a
-		d.Removed += r
-		if i < cards.MaxDiffFiles {
-			df := cards.DiffFile{Path: f.NewPath, New: f.NewFile, Deleted: f.DeletedFile, Added: a, Removed: r}
-			if f.RenamedFile {
-				df.RenamedFrom = f.OldPath
-			}
-			d.Files = append(d.Files, df)
-		}
-	}
-	return d
-}
-
 // diffStatsReversed derives after-versus-before stats from the reversed
 // compare (from=after, to=before, straight) the force-push check already
 // makes: git diff B A is the exact inverse of git diff A B, so the files are
@@ -168,30 +145,6 @@ func (e *Engine) enrichArtifacts(ctx context.Context, project event.Project, pip
 		}
 	}
 	return out
-}
-
-// enrichMR fetches approvals and the unresolved discussion count for one
-// merge request within prefetchTimeout.
-func (e *Engine) enrichMR(ctx context.Context, projectPath string, projectID, iid int64) enrichment {
-	ctx, cancel := context.WithTimeout(ctx, prefetchTimeout)
-	defer cancel()
-	var en enrichment
-	if a, err := e.api.MRApprovals(ctx, projectID, iid); err != nil {
-		e.logEnrich("approvals", projectPath, err)
-	} else {
-		en.approvals = a
-	}
-	if n, err := e.api.MRDiscussions(ctx, projectID, iid); err != nil {
-		e.logEnrich("discussions", projectPath, err)
-	} else {
-		en.unresolved, en.threads = n, true
-	}
-	if diffs, err := e.api.MRDiffs(ctx, projectID, iid); err != nil {
-		e.logEnrich("diffs", projectPath, err)
-	} else {
-		en.diff = diffStats(diffs)
-	}
-	return en
 }
 
 // logEnrich logs a failed enrichment call; 403 is expected on tiers without

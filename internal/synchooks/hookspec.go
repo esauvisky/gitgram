@@ -10,9 +10,7 @@ import (
 )
 
 // hookSpec maps the enabled config event classes onto GitLab hook flags.
-// Classes: push, tag, pipeline (job + pipeline), mr, mr_note/issue_note
-// (note + confidential_note), issue (issues + confidential_issues), release,
-// deployment.
+// Classes: push, pipeline (job + pipeline).
 func hookSpec(opts Options) (api.HookSpec, error) {
 	spec := api.HookSpec{
 		URL:                   opts.WebhookURL,
@@ -30,23 +28,9 @@ func hookSpec(opts Options) (api.HookSpec, error) {
 		switch class {
 		case "push":
 			spec.PushEvents = true
-		case "tag":
-			spec.TagPushEvents = true
 		case "pipeline":
 			spec.JobEvents = true
 			spec.PipelineEvents = true
-		case "mr":
-			spec.MergeRequestsEvents = true
-		case "mr_note", "issue_note":
-			spec.NoteEvents = true
-			spec.ConfidentialNoteEvents = true
-		case "issue":
-			spec.IssuesEvents = true
-			spec.ConfidentialIssuesEvents = true
-		case "release":
-			spec.ReleasesEvents = true
-		case "deployment":
-			spec.DeploymentEvents = true
 		default:
 			return api.HookSpec{}, fmt.Errorf("synchooks: unknown event class %q", class)
 		}
