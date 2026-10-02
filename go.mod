@@ -4,9 +4,7 @@ go 1.27.0
 
 require (
 	github.com/go-telegram/bot v1.27.0
-	github.com/gobwas/glob v1.0.0
 	golang.org/x/time v0.16.0
-	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )
 

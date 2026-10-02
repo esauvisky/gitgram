@@ -34,9 +34,9 @@ type Engine struct {
 	log    *slog.Logger
 }
 
-// New returns an Engine. reader may be nil when no gitlab.read_token is
+// New returns an Engine. reader may be nil when no GITGRAM_GITLAB_TOKEN is
 // configured: enrichment, log tails and the reconciler are then disabled.
-// writer may be nil when no gitlab.hooks_token is configured: cards then
+// writer may be nil when no GITGRAM_GITLAB_HOOKS_TOKEN is configured: cards then
 // carry no action buttons. notify is called after every committed
 // transaction that added outbox rows (the sender's Notify).
 func New(cfg *config.Config, st *store.Store, reader api.Reader, writer api.Writer, notify func(), logger *slog.Logger) *Engine {
@@ -56,20 +56,6 @@ func (e *Engine) Handle(ctx context.Context, deliveryKey string, ev event.Event)
 		log.Debug("event outside configured group")
 		return nil
 	}
-	eff := e.cfg.Resolve(proj.Path)
-	class, ok := classOf(ev)
-	if !ok {
-		log.Debug("event has no relayed class")
-		return nil
-	}
-	if !eff.EventEnabled(class) {
-		log.Debug("event class disabled", "class", class)
-		return nil
-	}
-	if ref, ok := filterRef(ev); ok && !eff.BranchAllowed(ref) {
-		log.Debug("branch filtered", "ref", ref)
-		return nil
-	}
 
 	en := e.prefetch(ctx, ev)
 
@@ -81,7 +67,7 @@ func (e *Engine) Handle(ctx context.Context, deliveryKey string, ev event.Event)
 		if !fresh {
 			return errDuplicate
 		}
-		return e.apply(ctx, tx, eff, ev, en)
+		return e.apply(ctx, tx, ev, en)
 	})
 	if errors.Is(err, errDuplicate) {
 		log.Debug("duplicate delivery", "key", deliveryKey)
@@ -96,50 +82,16 @@ func (e *Engine) Handle(ctx context.Context, deliveryKey string, ev event.Event)
 
 // apply routes one event to its handler inside tx. It is shared by Handle
 // and the reconciler, which bypasses dedupe.
-func (e *Engine) apply(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, ev event.Event, en enrichment) error {
+func (e *Engine) apply(ctx context.Context, tx *store.Tx, ev event.Event, en enrichment) error {
 	switch v := ev.(type) {
 	case *event.Pipeline, *event.Job:
-		return e.applyPipeline(ctx, tx, eff, ev, en)
+		return e.applyPipeline(ctx, tx, ev, en)
 	case *event.Push:
 		if v.IsDelete() {
-			return e.applyBranchDeleted(ctx, tx, eff, v)
+			return e.applyBranchDeleted(ctx, tx, v)
 		}
-		return e.applyPush(ctx, tx, eff, v, en)
+		return e.applyPush(ctx, tx, v, en)
 	}
 	e.log.Warn("unhandled event type", "kind", ev.EventKind())
 	return nil
-}
-
-// classOf maps an event to its config event class.
-func classOf(ev event.Event) (config.EventClass, bool) {
-	switch ev.(type) {
-	case *event.Push:
-		return config.EventPush, true
-	case *event.Pipeline, *event.Job:
-		return config.EventPipeline, true
-	}
-	return "", false
-}
-
-// filterRef returns the ref the branch allow/deny filter applies to: push
-// and pipeline/job refs.
-func filterRef(ev event.Event) (string, bool) {
-	switch v := ev.(type) {
-	case *event.Push:
-		return v.Ref, true
-	case *event.Pipeline:
-		return v.Ref, true
-	case *event.Job:
-		return v.Ref, true
-	}
-	return "", false
-}
-
-// threadPtr converts a config thread id into the store's optional form; 0
-// (General) becomes nil.
-func threadPtr(id int64) *int64 {
-	if id == 0 {
-		return nil
-	}
-	return &id
 }

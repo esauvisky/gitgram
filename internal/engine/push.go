@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/esauvisky/gitgram/internal/cards"
-	"github.com/esauvisky/gitgram/internal/config"
 	"github.com/esauvisky/gitgram/internal/event"
 	"github.com/esauvisky/gitgram/internal/render"
 	"github.com/esauvisky/gitgram/internal/store"
@@ -17,7 +16,7 @@ import (
 // applyPush folds a branch push into the push card keyed by (project,
 // branch, after), applies the diff enrichment, marks the branch's previous
 // push card superseded and enqueues both cards.
-func (e *Engine) applyPush(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, ev *event.Push, en enrichment) error {
+func (e *Engine) applyPush(ctx context.Context, tx *store.Tx, ev *event.Push, en enrichment) error {
 	key := cards.PushKey(ev.Project.ID, ev.Branch(), ev.After)
 	st, row, err := load[cards.PushState](ctx, tx, key, e.log)
 	if err != nil {
@@ -31,7 +30,7 @@ func (e *Engine) applyPush(ctx context.Context, tx *store.Tx, eff config.Effecti
 		return err
 	}
 	if !ev.IsCreate() && ev.Before != ev.After {
-		if err := e.supersedePush(ctx, tx, eff, cards.PushKey(ev.Project.ID, ev.Branch(), ev.Before), ev.After); err != nil {
+		if err := e.supersedePush(ctx, tx, cards.PushKey(ev.Project.ID, ev.Branch(), ev.Before), ev.After); err != nil {
 			return err
 		}
 	}
@@ -42,26 +41,26 @@ func (e *Engine) applyPush(ctx context.Context, tx *store.Tx, eff config.Effecti
 	if !changed && card != nil {
 		return nil
 	}
-	return e.enqueueCard(ctx, tx, key, eff.ThreadFor(config.EventPush), card, st.Final)
+	return e.enqueueCard(ctx, tx, key, card, st.Final)
 }
 
 // applyBranchDeleted posts the deletion as a standalone message and freezes
 // the branch's last push card.
-func (e *Engine) applyBranchDeleted(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, ev *event.Push) error {
-	if err := e.supersedePush(ctx, tx, eff, cards.PushKey(ev.Project.ID, ev.Branch(), ev.Before), ""); err != nil {
+func (e *Engine) applyBranchDeleted(ctx context.Context, tx *store.Tx, ev *event.Push) error {
+	if err := e.supersedePush(ctx, tx, cards.PushKey(ev.Project.ID, ev.Branch(), ev.Before), ""); err != nil {
 		return err
 	}
-	payload, err := json.Marshal(render.BranchDeleted(ev, e.options(eff)))
+	payload, err := json.Marshal(render.BranchDeleted(ev, e.options()))
 	if err != nil {
 		return fmt.Errorf("encode branch deletion: %w", err)
 	}
-	return tx.EnqueueSend(ctx, threadPtr(eff.ThreadFor(config.EventPush)), payload)
+	return tx.EnqueueSend(ctx, nil, payload)
 }
 
 // supersedePush freezes the previous push card when it exists and is not
 // already superseded, and flushes its final edit. Skeletons have no card
 // to edit.
-func (e *Engine) supersedePush(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, prevKey cards.Key, by string) error {
+func (e *Engine) supersedePush(ctx context.Context, tx *store.Tx, prevKey cards.Key, by string) error {
 	prev, row, err := load[cards.PushState](ctx, tx, prevKey, e.log)
 	if err != nil || row == nil {
 		return err
@@ -79,7 +78,7 @@ func (e *Engine) supersedePush(ctx context.Context, tx *store.Tx, eff config.Eff
 	if err != nil {
 		return err
 	}
-	return e.enqueueCard(ctx, tx, prevKey, eff.ThreadFor(config.EventPush), card, true)
+	return e.enqueueCard(ctx, tx, prevKey, card, true)
 }
 
 // syncPipelinePush keeps the push card of a pipeline's (branch, sha) in
@@ -98,10 +97,6 @@ func (e *Engine) supersedePush(ctx context.Context, tx *store.Tx, eff config.Eff
 // skipped, as are projects without push cards.
 func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.Key, st *cards.PipelineState, received time.Time) (absorbed, hold bool, err error) {
 	if st.Parent != nil || st.Tag || st.SHA == "" || st.Ref == "" || strings.HasPrefix(st.Ref, "refs/") {
-		return false, false, nil
-	}
-	eff := e.cfg.Resolve(st.Project.Path)
-	if !eff.EventEnabled(config.EventPush) {
 		return false, false, nil
 	}
 	pk := cards.PushKey(st.Project.ID, st.Ref, st.SHA)
@@ -144,7 +139,7 @@ func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.K
 		if err != nil {
 			return false, false, err
 		}
-		return false, false, e.enqueueCard(ctx, tx, pk, eff.ThreadFor(config.EventPush), card, push.Final)
+		return false, false, e.enqueueCard(ctx, tx, pk, card, push.Final)
 	}
 
 	if push.Superseded && !push.Absorbs {
@@ -173,18 +168,18 @@ func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.K
 	if err != nil {
 		return false, false, err
 	}
-	return push.Absorbs, false, e.enqueueCard(ctx, tx, pk, eff.ThreadFor(config.EventPush), card, push.Final)
+	return push.Absorbs, false, e.enqueueCard(ctx, tx, pk, card, push.Final)
 }
 
 // publishPipeline pushes a changed pipeline state to whichever card shows
 // it: the push card that absorbs it, or its own card, which waits while
 // the pipeline's source is unknown and a push card might claim it.
-func (e *Engine) publishPipeline(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, key cards.Key, st *cards.PipelineState, received time.Time) error {
+func (e *Engine) publishPipeline(ctx context.Context, tx *store.Tx, key cards.Key, st *cards.PipelineState, received time.Time) error {
 	absorbed, hold, err := e.syncPipelinePush(ctx, tx, key, st, received)
 	if err != nil || absorbed || hold {
 		return err
 	}
-	return e.enqueuePipelineCard(ctx, tx, eff, st)
+	return e.enqueuePipelineCard(ctx, tx, st)
 }
 
 // DecoratePush writes diff stats into a push's stored state and queues its
@@ -205,7 +200,7 @@ func (e *Engine) DecoratePush(ctx context.Context, key cards.Key, diff cards.Dif
 		if err != nil {
 			return err
 		}
-		return e.enqueueCard(ctx, tx, key, e.cfg.Resolve(st.Project.Path).ThreadFor(config.EventPush), card, st.Final)
+		return e.enqueueCard(ctx, tx, key, card, st.Final)
 	})
 	if err != nil {
 		return err

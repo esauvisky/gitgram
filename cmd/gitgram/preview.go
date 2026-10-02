@@ -26,14 +26,13 @@ import (
 // and never polls Telegram, so it runs beside a live `serve`.
 func runPreview(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("preview", flag.ContinueOnError)
-	configPath := fs.String("config", defaultConfigPath, "path to config.yaml")
 	scenario := fs.String("scenario", "all", "comma-separated scenarios, or all: "+strings.Join(preview.Names(), ", "))
 	delay := fs.Duration("delay", 4*time.Second, "pause between the steps of a scenario, so edits can be watched")
 	dbPath := fs.String("db", "", "SQLite file for the preview state; default is a temporary file removed on exit")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	cfg, err := config.Load(*configPath, func(c *config.Config) {
+	cfg, err := config.Load(func(c *config.Config) {
 		// Nothing listens here: the mode only has to validate.
 		c.Telegram.Mode = telegram.ModePolling
 	})

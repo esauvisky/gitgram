@@ -31,15 +31,14 @@ const (
 
 func runServe(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	configPath := fs.String("config", defaultConfigPath, "path to config.yaml")
 	poll := fs.Bool("poll", false, "use Telegram long polling instead of the webhook (dev)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	// The mode override runs before validation so a webhook-mode config
-	// without telegram.webhook_secret still loads under --poll.
-	cfg, err := config.Load(*configPath, func(c *config.Config) {
+	// The mode override runs before validation so a webhook-mode setup
+	// without GITGRAM_TG_WEBHOOK_SECRET still loads under --poll.
+	cfg, err := config.Load(func(c *config.Config) {
 		if *poll {
 			c.Telegram.Mode = telegram.ModePolling
 		}
@@ -53,7 +52,6 @@ func runServe(ctx context.Context, args []string) error {
 		"listen", cfg.Server.Listen,
 		"telegram_mode", cfg.Telegram.Mode,
 		"gitlab_group", cfg.GitLab.Group,
-		"projects", len(cfg.Projects),
 		"enrichment", cfg.GitLab.ReadToken != "",
 		"actions", cfg.GitLab.HooksToken != "",
 	)

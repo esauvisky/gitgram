@@ -69,8 +69,7 @@ func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 // jobs that the stored pipeline state does not already hold, within
 // prefetchTimeout in total.
 func (e *Engine) enrichFailedTails(ctx context.Context, project event.Project, pipelineID int64, jobs []event.Job) enrichment {
-	eff := e.cfg.Resolve(project.Path)
-	if eff.Pipelines.LogTailLines == 0 {
+	if e.cfg.LogLines == 0 {
 		return enrichment{}
 	}
 	var failed []event.Job
@@ -95,7 +94,7 @@ func (e *Engine) enrichFailedTails(ctx context.Context, project event.Project, p
 		if cur, ok := st.Tails[j.ID]; ok && cur.Final {
 			continue
 		}
-		if tail, ok := e.fetchTail(ctx, &cards.PipelineState{Project: project}, cards.JobState{ID: j.ID}, eff.Pipelines.LogTailLines, now, true); ok {
+		if tail, ok := e.fetchTail(ctx, &cards.PipelineState{Project: project}, cards.JobState{ID: j.ID}, e.cfg.LogLines, now, true); ok {
 			if en.tails == nil {
 				en.tails = map[int64]*cards.JobTail{}
 			}

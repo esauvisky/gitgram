@@ -69,16 +69,16 @@ func latest(row *store.ObjectRow, t time.Time) time.Time {
 // and final states are flushed to now instead of waiting coalesceDelay.
 // card is the current card_messages row, nil when none exists; cards that
 // Telegram reported deleted or uneditable are left alone.
-func (e *Engine) enqueueCard(ctx context.Context, tx *store.Tx, key cards.Key, thread int64, card *store.CardRow, final bool) error {
-	sk, t := skey(key), threadPtr(thread)
+func (e *Engine) enqueueCard(ctx context.Context, tx *store.Tx, key cards.Key, card *store.CardRow, final bool) error {
+	sk := skey(key)
 	if card == nil {
-		if err := tx.UpsertCard(ctx, sk, t); err != nil {
+		if err := tx.UpsertCard(ctx, sk, nil); err != nil {
 			return err
 		}
 	} else if card.Status != store.CardLive {
 		return nil
 	}
-	if err := tx.EnqueueCard(ctx, sk, t, time.Now().Add(coalesceDelay)); err != nil {
+	if err := tx.EnqueueCard(ctx, sk, nil, time.Now().Add(coalesceDelay)); err != nil {
 		return err
 	}
 	if final || card == nil || card.MessageID == nil {

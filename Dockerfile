@@ -7,7 +7,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X github.com/esauvisky/gitgram/internal/ops.Version=${VERSION}" \
     -o /gitgram ./cmd/gitgram \
-    && mkdir -p /data /config
+    && mkdir -p /data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 LABEL org.opencontainers.image.source="https://github.com/esauvisky/gitgram" \
@@ -15,10 +15,9 @@ LABEL org.opencontainers.image.source="https://github.com/esauvisky/gitgram" \
       org.opencontainers.image.licenses="MIT"
 COPY --from=build /gitgram /gitgram
 COPY --from=build --chown=nonroot:nonroot /data /data
-COPY --from=build --chown=nonroot:nonroot /config /config
 VOLUME ["/data"]
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["/gitgram", "healthcheck", "--url", "http://127.0.0.1:8080/healthz"]
 ENTRYPOINT ["/gitgram"]
-CMD ["serve", "--config", "/config/config.yaml"]
+CMD ["serve"]

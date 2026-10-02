@@ -52,8 +52,6 @@ func (m Message) Hash() string {
 
 // Options controls rendering for one project.
 type Options struct {
-	// Verbosity is quiet, normal or verbose; anything else renders as normal.
-	Verbosity string
 	// MaxLen is the message length limit; 0 means DefaultMaxLen. Messages
 	// are truncated to MaxLen-Margin.
 	MaxLen int
@@ -81,7 +79,7 @@ func actionButton(text string, cb actions.Callback) (Button, bool) {
 //   - the headline: who (bold handle, never a link) did what in which
 //     project (branch); fixed once posted, no emoji;
 //   - small lines, italic: the detail under it;
-//   - folds, expandable quotes whose bold first line is the label.
+//   - the commits fold, an expandable quote.
 
 // headline writes the card's title, which never changes once the card is
 // posted: lead (who did what, formatted HTML), the preposition, the linked
@@ -139,12 +137,6 @@ func small(b *htmlfmt.Builder, inner string) {
 }
 
 var unitalic = strings.NewReplacer("<i>", "", "</i>", "")
-
-// fold writes an expandable quote headed by label in bold. rows is
-// already-formatted HTML, lines separated by newlines.
-func fold(b *htmlfmt.Builder, label, rows string) {
-	b.Quote("<b>"+label+"</b>\n"+rows, true)
-}
 
 func (o Options) limit() int {
 	max := o.MaxLen

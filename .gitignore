@@ -1,6 +1,5 @@
 /gitgram
 /data/
-config.yaml
 .env
 *.db
 *.db-*

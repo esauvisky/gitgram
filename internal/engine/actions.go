@@ -46,7 +46,7 @@ func (e *Engine) Can(k actions.Kind, a actions.Action) bool {
 // update the card.
 func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Result, error) {
 	if e.writer == nil {
-		return actions.Result{Toast: "Actions need gitlab.hooks_token.", Alert: true}, nil
+		return actions.Result{Toast: "Actions need GITGRAM_GITLAB_HOOKS_TOKEN.", Alert: true}, nil
 	}
 	if !e.Can(req.Kind, req.Action) {
 		return actions.Result{Toast: "This button is no longer valid.", Alert: true}, nil
@@ -109,7 +109,7 @@ func (e *Engine) setConfirmStop(ctx context.Context, key cards.Key, on bool) err
 		if err := put(ctx, tx, key, st, st.Final, row.LastEventAt); err != nil {
 			return err
 		}
-		return e.publishPipeline(ctx, tx, e.cfg.Resolve(st.Project.Path), key, st, row.LastEventAt)
+		return e.publishPipeline(ctx, tx, key, st, row.LastEventAt)
 	})
 	if err != nil {
 		return err

@@ -1,235 +1,188 @@
-// Package config loads, expands, validates and resolves the Gitgram YAML
-// configuration.
+// Package config reads and validates the Gitgram settings from GITGRAM_*
+// environment variables (a .env file under Docker Compose).
 package config
 
 import (
 	"errors"
 	"fmt"
-	"io"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
-// Config is the top-level YAML schema.
+// Config holds every setting the bot reads.
 type Config struct {
-	Telegram Telegram         `yaml:"telegram"`
-	Server   Server           `yaml:"server"`
-	GitLab   GitLab           `yaml:"gitlab"`
-	Storage  Storage          `yaml:"storage"`
-	Logging  Logging          `yaml:"logging"`
-	Defaults Settings         `yaml:"defaults"`
-	Projects []Project        `yaml:"projects"`
-	Users    map[string]int64 `yaml:"users"`
+	Telegram Telegram
+	Server   Server
+	GitLab   GitLab
+	Storage  Storage
+	Logging  Logging
+	// LogLines is how many lines of a failed job's log a card shows; 0
+	// disables failure logs.
+	LogLines int
+	// MaxCommits caps the commits listed on a push card.
+	MaxCommits int
 }
 
-// Telegram configures the bot transport and the destination chat.
+// Telegram configures the bot transport and the destination chats.
 type Telegram struct {
-	Token         string           `yaml:"token"`
-	ChatIDs       ChatIDs          `yaml:"chat_id"`
-	Mode          string           `yaml:"mode"` // webhook | polling
-	WebhookSecret string           `yaml:"webhook_secret"`
-	Threads       map[string]int64 `yaml:"threads"` // event class or "default" → forum topic id
+	Token string
+	// ChatIDs receive every card; the first is the primary, the one the
+	// bot's bookkeeping follows.
+	ChatIDs []int64
+	// Mode is webhook or polling.
+	Mode          string
+	WebhookSecret string
 }
 
-// ChatIDs is telegram.chat_id: one id, a comma-separated list of ids, or a
-// YAML list. Every card goes to each chat; the first is the primary, the
-// one the bot's bookkeeping follows.
-type ChatIDs []int64
-
-// UnmarshalYAML implements yaml.Unmarshaler.
-func (c *ChatIDs) UnmarshalYAML(n *yaml.Node) error {
-	switch n.Kind {
-	case yaml.SequenceNode:
-		var ids []int64
-		if err := n.Decode(&ids); err != nil {
-			return err
-		}
-		*c = ids
-		return nil
-	case yaml.ScalarNode:
-		var ids []int64
-		for _, part := range strings.Split(n.Value, ",") {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-			id, err := strconv.ParseInt(part, 10, 64)
-			if err != nil {
-				return fmt.Errorf("line %d: telegram.chat_id: %q is not a chat id", n.Line, part)
-			}
-			ids = append(ids, id)
-		}
-		*c = ids
-		return nil
-	}
-	return fmt.Errorf("line %d: telegram.chat_id: want an id or a comma-separated list", n.Line)
-}
-
-// Server configures the HTTP listener and the public webhook paths.
+// Server configures the HTTP listener and the webhook paths.
 type Server struct {
-	Listen              string `yaml:"listen"`
-	PublicBaseURL       string `yaml:"public_base_url"`
-	GitLabWebhookPath   string `yaml:"gitlab_webhook_path"`
-	TelegramWebhookPath string `yaml:"telegram_webhook_path"`
+	Listen              string
+	PublicBaseURL       string
+	GitLabWebhookPath   string
+	TelegramWebhookPath string
 }
 
-// GitLab configures the instance, the accepted group and the tokens.
+// GitLab configures the GitLab instance, the group the bot serves and its
+// tokens.
 type GitLab struct {
-	BaseURL       string `yaml:"base_url"`
-	Group         string `yaml:"group"`
-	ReadToken     string `yaml:"read_token"`
-	HooksToken    string `yaml:"hooks_token"`
-	WebhookSecret string `yaml:"webhook_secret"`
+	BaseURL string
+	// Group is the top-level group; every project under it (subgroups
+	// included) is accepted.
+	Group string
+	// ReadToken (read_api) enables diff stats, failure logs, artifacts,
+	// force-push detection and the reconciler.
+	ReadToken string
+	// HooksToken (api) enables sync-hooks and the card buttons.
+	HooksToken    string
+	WebhookSecret string
 }
 
-// Storage configures the SQLite database.
+// Storage is where the SQLite database lives.
 type Storage struct {
-	Path string `yaml:"path"`
+	Path string
 }
 
 // Logging configures slog.
 type Logging struct {
-	Level  string `yaml:"level"`  // debug | info | warn | error
-	Format string `yaml:"format"` // text | json
+	Level  string
+	Format string
 }
 
-// Settings holds the per-project tunables. The same shape is used for
-// `defaults:` and for each `projects[]` entry; unset fields inherit from the
-// layer below (project → defaults → built-in).
-type Settings struct {
-	Events    []EventClass     `yaml:"events"`
-	Verbosity string           `yaml:"verbosity"` // quiet | normal | verbose
-	Branches  Branches         `yaml:"branches"`
-	Pipelines Pipelines        `yaml:"pipelines"`
-	Push      Push             `yaml:"push"`
-	Threads   map[string]int64 `yaml:"threads"`
-}
-
-// Branches is the allow/deny filter for refs. Patterns are globs
-// (github.com/gobwas/glob) or, with the "re:" prefix, Go regular expressions.
-type Branches struct {
-	Allow []string `yaml:"allow"`
-	Deny  []string `yaml:"deny"`
-
-	allow, deny []matcher
-}
-
-// Pipelines tunes pipeline cards.
-type Pipelines struct {
-	ChildCards   string  `yaml:"child_cards"` // inline | own | both
-	QuietSuccess *bool   `yaml:"quiet_success"`
-	LogTail      LogTail `yaml:"log_tail"`
-}
-
-// LogTail tunes the failed-job log on pipeline cards: the last Lines of the
-// failed job's log, shown under its stage. Lines 0 disables it. Needs
-// gitlab.read_token.
-type LogTail struct {
-	Lines *int `yaml:"lines"`
-}
-
-// Push tunes push summaries.
-type Push struct {
-	MaxCommits *int `yaml:"max_commits"`
-}
-
-// Project is a per-project override, matched by path_with_namespace.
-type Project struct {
-	Path     string `yaml:"path"`
-	Settings `yaml:",inline"`
-}
-
-// Load reads the YAML file at path, expands ${VAR} / ${VAR:-default}
-// references from the environment, applies built-in defaults, runs the
-// overrides (command-line flags such as --poll) and validates. Every
-// validation problem is reported in the returned error.
-func Load(path string, overrides ...func(*Config)) (*Config, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("config: %w", err)
+// Load reads the settings from the environment, applies the defaults and
+// validates them. Overrides run before validation (the --poll flag sets
+// the mode). Every problem is reported at once.
+func Load(overrides ...func(*Config)) (*Config, error) {
+	var errs []error
+	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
+	env := func(name, def string) string {
+		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+			return v
+		}
+		return def
 	}
-	expanded, err := expandEnv(string(raw))
-	if err != nil {
-		return nil, fmt.Errorf("config %s: %w", path, err)
+	number := func(name string, def int) int {
+		raw := env(name, "")
+		if raw == "" {
+			return def
+		}
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			bad("%s: %q is not a number", name, raw)
+		}
+		return n
 	}
-	var cfg Config
-	dec := yaml.NewDecoder(strings.NewReader(expanded))
-	dec.KnownFields(true)
-	// An empty file decodes as io.EOF; let validation report what is missing.
-	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("config %s: %w", path, err)
+
+	c := &Config{
+		Telegram: Telegram{
+			Token:         env("GITGRAM_TELEGRAM_TOKEN", ""),
+			Mode:          env("GITGRAM_TELEGRAM_MODE", "webhook"),
+			WebhookSecret: env("GITGRAM_TG_WEBHOOK_SECRET", ""),
+		},
+		Server: Server{
+			Listen:              env("GITGRAM_LISTEN", ":8080"),
+			PublicBaseURL:       strings.TrimRight(env("GITGRAM_PUBLIC_URL", ""), "/"),
+			GitLabWebhookPath:   "/webhook/gitlab",
+			TelegramWebhookPath: "/webhook/telegram",
+		},
+		GitLab: GitLab{
+			BaseURL:       strings.TrimRight(env("GITGRAM_GITLAB_URL", "https://gitlab.com"), "/"),
+			Group:         strings.Trim(env("GITGRAM_GITLAB_GROUP", ""), "/"),
+			ReadToken:     env("GITGRAM_GITLAB_TOKEN", ""),
+			HooksToken:    env("GITGRAM_GITLAB_HOOKS_TOKEN", ""),
+			WebhookSecret: env("GITGRAM_WEBHOOK_SECRET", ""),
+		},
+		Storage:    Storage{Path: env("GITGRAM_DB", "/data/gitgram.db")},
+		Logging:    Logging{Level: env("GITGRAM_LOG_LEVEL", "info"), Format: env("GITGRAM_LOG_FORMAT", "text")},
+		LogLines:   number("GITGRAM_LOG_LINES", 10),
+		MaxCommits: number("GITGRAM_MAX_COMMITS", 10),
 	}
-	cfg.applyDefaults()
+	seen := map[int64]bool{}
+	for _, part := range strings.Split(env("GITGRAM_CHAT_ID", ""), ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(part, 10, 64)
+		switch {
+		case err != nil || id == 0:
+			bad("GITGRAM_CHAT_ID: %q is not a chat id", part)
+		case seen[id]:
+			bad("GITGRAM_CHAT_ID: %d listed twice", id)
+		default:
+			seen[id] = true
+			c.Telegram.ChatIDs = append(c.Telegram.ChatIDs, id)
+		}
+	}
 	for _, o := range overrides {
-		o(&cfg)
+		o(c)
 	}
-	if errs := cfg.validate(); len(errs) > 0 {
-		return nil, fmt.Errorf("config %s:\n%w", path, errors.Join(errs...))
+
+	required := []struct{ name, value string }{
+		{"GITGRAM_TELEGRAM_TOKEN", c.Telegram.Token},
+		{"GITGRAM_GITLAB_GROUP", c.GitLab.Group},
+		{"GITGRAM_WEBHOOK_SECRET", c.GitLab.WebhookSecret},
 	}
-	return &cfg, nil
+	for _, r := range required {
+		if r.value == "" {
+			bad("%s: required", r.name)
+		}
+	}
+	if len(c.Telegram.ChatIDs) == 0 {
+		bad("GITGRAM_CHAT_ID: required")
+	}
+	switch c.Telegram.Mode {
+	case "webhook":
+		if c.Telegram.WebhookSecret == "" {
+			bad("GITGRAM_TG_WEBHOOK_SECRET: required in webhook mode")
+		}
+		if c.Server.PublicBaseURL == "" {
+			bad("GITGRAM_PUBLIC_URL: required in webhook mode")
+		}
+	case "polling":
+	default:
+		bad("GITGRAM_TELEGRAM_MODE: %q must be webhook or polling", c.Telegram.Mode)
+	}
+	for _, u := range []struct{ name, value string }{{"GITGRAM_PUBLIC_URL", c.Server.PublicBaseURL}, {"GITGRAM_GITLAB_URL", c.GitLab.BaseURL}} {
+		if p, err := url.Parse(u.value); u.value != "" && (err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "") {
+			bad("%s: %q must be an absolute http(s) URL", u.name, u.value)
+		}
+	}
+	if c.LogLines < 0 || c.LogLines > 50 {
+		bad("GITGRAM_LOG_LINES: must be 0..50, got %d", c.LogLines)
+	}
+	if c.MaxCommits < 1 {
+		bad("GITGRAM_MAX_COMMITS: must be at least 1, got %d", c.MaxCommits)
+	}
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("config: %w", errors.Join(errs...))
+	}
+	return c, nil
 }
 
-func (c *Config) applyDefaults() {
-	if c.Telegram.Mode == "" {
-		c.Telegram.Mode = "webhook"
-	}
-	if c.Server.Listen == "" {
-		c.Server.Listen = ":8080"
-	}
-	if c.Server.GitLabWebhookPath == "" {
-		c.Server.GitLabWebhookPath = "/webhook/gitlab"
-	}
-	if c.Server.TelegramWebhookPath == "" {
-		c.Server.TelegramWebhookPath = "/webhook/telegram"
-	}
-	if c.GitLab.BaseURL == "" {
-		c.GitLab.BaseURL = "https://gitlab.com"
-	}
-	c.GitLab.BaseURL = strings.TrimRight(c.GitLab.BaseURL, "/")
-	c.Server.PublicBaseURL = strings.TrimRight(c.Server.PublicBaseURL, "/")
-	c.GitLab.Group = strings.Trim(c.GitLab.Group, "/")
-	if c.Storage.Path == "" {
-		c.Storage.Path = "/data/gitgram.db"
-	}
-	if c.Logging.Level == "" {
-		c.Logging.Level = "info"
-	}
-	if c.Logging.Format == "" {
-		c.Logging.Format = "text"
-	}
-	d := &c.Defaults
-	if d.Events == nil {
-		d.Events = AllEventClasses
-	}
-	if d.Verbosity == "" {
-		d.Verbosity = "normal"
-	}
-	if d.Branches.Allow == nil {
-		d.Branches.Allow = []string{"*"}
-	}
-	if d.Branches.Deny == nil {
-		d.Branches.Deny = []string{}
-	}
-	if d.Pipelines.ChildCards == "" {
-		d.Pipelines.ChildCards = "inline"
-	}
-	if d.Pipelines.QuietSuccess == nil {
-		d.Pipelines.QuietSuccess = ptr(true)
-	}
-	if d.Pipelines.LogTail.Lines == nil {
-		d.Pipelines.LogTail.Lines = ptr(10)
-	}
-	if d.Push.MaxCommits == nil {
-		d.Push.MaxCommits = ptr(10)
-	}
-	users := make(map[string]int64, len(c.Users))
-	for name, id := range c.Users {
-		users[strings.ToLower(name)] = id
-	}
-	c.Users = users
+// Accepts reports whether a project path belongs to the configured group
+// (subgroups included).
+func (c *Config) Accepts(projectPath string) bool {
+	return strings.HasPrefix(projectPath, c.GitLab.Group+"/")
 }
-
-func ptr[T any](v T) *T { return &v }

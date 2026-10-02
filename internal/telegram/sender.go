@@ -331,7 +331,7 @@ func (s *Sender) fail(ctx context.Context, item *OutboxItem, chat int64, err err
 	case outcomePermanent:
 		var mig *bot.MigrateError
 		if errors.As(err, &mig) {
-			s.log.Error("telegram: chat migrated to a supergroup, update telegram.chat_id", "id", item.ID, "chat", chat, "migrate_to_chat_id", mig.MigrateToChatID)
+			s.log.Error("telegram: chat migrated to a supergroup, update GITGRAM_CHAT_ID", "id", item.ID, "chat", chat, "migrate_to_chat_id", mig.MigrateToChatID)
 		}
 		s.log.Error("telegram: permanent failure, giving up on this chat", "id", item.ID, "chat", chat, "op", item.Op, "err", err)
 		return 0, nil

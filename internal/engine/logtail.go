@@ -36,13 +36,11 @@ func (e *Engine) fetchTail(ctx context.Context, st *cards.PipelineState, j cards
 // prefetch would after reading GitLab. The preview subcommand uses it to
 // show tails and artifacts without a GitLab behind them.
 func (e *Engine) Decorate(ctx context.Context, key cards.Key, tails map[int64]*cards.JobTail, artifacts []cards.Artifact) error {
-	eff := e.cfg.Resolve("")
 	err := e.st.WithTx(ctx, func(tx *store.Tx) error {
 		st, row, err := load[cards.PipelineState](ctx, tx, key, e.log)
 		if err != nil || row == nil {
 			return err
 		}
-		eff = e.cfg.Resolve(st.Project.Path)
 		changed := mergeTails(st, tails)
 		if artifacts != nil {
 			st.Artifacts = artifacts
@@ -54,7 +52,7 @@ func (e *Engine) Decorate(ctx context.Context, key cards.Key, tails map[int64]*c
 		if err := put(ctx, tx, key, st, st.Final, row.LastEventAt); err != nil {
 			return err
 		}
-		return e.publishPipeline(ctx, tx, eff, key, st, row.LastEventAt)
+		return e.publishPipeline(ctx, tx, key, st, row.LastEventAt)
 	})
 	if err != nil {
 		return err

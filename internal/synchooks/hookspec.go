@@ -3,39 +3,22 @@ package synchooks
 import (
 	"fmt"
 	"reflect"
-	"sort"
 	"strings"
 
 	"github.com/esauvisky/gitgram/internal/gitlab/api"
 )
 
-// hookSpec maps the enabled config event classes onto GitLab hook flags.
-// Classes: push, pipeline (job + pipeline).
-func hookSpec(opts Options) (api.HookSpec, error) {
-	spec := api.HookSpec{
+// hookSpec is the hook the bot needs: push, job and pipeline events, every
+// other event off.
+func hookSpec(opts Options) api.HookSpec {
+	return api.HookSpec{
 		URL:                   opts.WebhookURL,
 		Token:                 opts.Secret,
 		EnableSSLVerification: strings.HasPrefix(opts.WebhookURL, "https://"),
+		PushEvents:            true,
+		JobEvents:             true,
+		PipelineEvents:        true,
 	}
-	classes := make([]string, 0, len(opts.Events))
-	for class, on := range opts.Events {
-		if on {
-			classes = append(classes, class)
-		}
-	}
-	sort.Strings(classes)
-	for _, class := range classes {
-		switch class {
-		case "push":
-			spec.PushEvents = true
-		case "pipeline":
-			spec.JobEvents = true
-			spec.PipelineEvents = true
-		default:
-			return api.HookSpec{}, fmt.Errorf("synchooks: unknown event class %q", class)
-		}
-	}
-	return spec, nil
 }
 
 // diffSpec lists the fields (by JSON name) whose value differs between the

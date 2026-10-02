@@ -53,7 +53,7 @@ func Pipeline(s *cards.PipelineState, o Options) Message {
 	if s.Commit.SHA != "" || s.Commit.Title != "" {
 		b.Quote(commitLine(s.Commit, commitAuthor(s.Commit, s.Triggerer)), false)
 	}
-	pipelineBody(s, v, o, &b)
+	pipelineBody(s, v, &b)
 	taglineFooter(&b, "pipeline:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.ID, 10))
 	return Message{HTML: b.Truncate(o.limit(), s.URL), Keyboard: pipelineKeyboard(s, v, o)}
 }
@@ -70,9 +70,8 @@ func pipelineAnchor(s *cards.PipelineState) string {
 // pipelineBody writes, after a blank line, one line per stage in every
 // state of the pipeline:
 // mark, linked name, state, time once finished, and the failed job's log
-// right under a failed stage. Downstream pipelines and the verbose Jobs
-// fold follow.
-func pipelineBody(s *cards.PipelineState, v *pipelineView, o Options, b *htmlfmt.Builder) {
+// right under a failed stage. Downstream pipelines follow.
+func pipelineBody(s *cards.PipelineState, v *pipelineView, b *htmlfmt.Builder) {
 	stages := groupStages(v.jobs)
 	if len(stages) > 0 {
 		b.Line("")
@@ -90,16 +89,6 @@ func pipelineBody(s *cards.PipelineState, v *pipelineView, o Options, b *htmlfmt
 			parts[i] = childLine(c)
 		}
 		b.Line("Downstream: " + strings.Join(parts, " · "))
-	}
-	if o.Verbosity == "verbose" && len(v.jobs) > 0 {
-		var detail []string
-		for _, st := range stages {
-			detail = append(detail, htmlfmt.B(st.name))
-			for _, j := range st.jobs {
-				detail = append(detail, verboseJob(j))
-			}
-		}
-		fold(b, "Jobs", strings.Join(detail, "\n"))
 	}
 }
 
@@ -319,23 +308,6 @@ func failureReason(j cards.JobState) string {
 	return humanize(j.FailureReason)
 }
 
-func verboseJob(j cards.JobState) string {
-	l := jobLink(j) + " " + strings.ToLower(statusWord(j.Status, j.AllowFailure))
-	if j.Duration != nil {
-		l += " · " + htmlfmt.Dur(*j.Duration)
-	}
-	if j.QueuedDuration != nil {
-		l += " · queued " + htmlfmt.Dur(*j.QueuedDuration)
-	}
-	if r := failureReason(j); j.Status == event.StatusFailed && r != "" {
-		l += " · " + htmlfmt.Esc(r)
-	}
-	if j.Retries > 0 {
-		l += " · retry " + strconv.Itoa(j.Retries)
-	}
-	return l
-}
-
 // childLine names a downstream pipeline with its status as a word.
 func childLine(c cards.ChildSummary) string {
 	label := "#" + strconv.FormatInt(c.ID, 10)
@@ -358,13 +330,6 @@ func hardFailures(jobs []cards.JobState) []cards.JobState {
 		}
 	}
 	return out
-}
-
-func jobLink(j cards.JobState) string {
-	if j.URL == "" {
-		return htmlfmt.Esc(j.Name)
-	}
-	return htmlfmt.A(j.Name, j.URL)
 }
 
 // pipelineKeyboard is the card's buttons: `Run <job>` for each manual job

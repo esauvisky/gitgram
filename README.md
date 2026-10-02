@@ -23,7 +23,6 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 - **Stop, Retry and Run**: a running pipeline carries `Stop pipeline`, which asks `Yes, stop it` / `Keep running` before canceling; a failed one carries `Retry`, no questions asked; a manual job waiting to start gets `Run <job>`. Needs `gitlab.hooks_token`; anyone in the group may press. Everything else is a link in the text.
 - **Push cards**: `@ada pushed to agent (feat/x)`, the commits in one quote as `author: title`, closed by the line counts (`+23, -46 lines on 4 files`), and the pipeline that push triggered, all edited in place. A newer push to the same branch gets its own card. Branch created and deleted, and a force-push warning (detected via the API, because GitLab doesn't tell you).
 - **Handles, not pings**: people show as bold `@gitlab-user` that never links to a Telegram account, so a card never notifies anyone.
-- **Forum topics**: route pipelines and pushes to their own topics.
 - **Reconciler**: cards that stopped receiving events get re-read from the GitLab API. GitLab does not retry failed webhook deliveries, ever, so somebody has to.
 - **`sync-hooks`**: registers the webhook on every project in the group, or one group hook if you pay for Premium.
 - Everything else is a tap away through the links in the card; there are no link buttons.
@@ -33,16 +32,16 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 ### 1. Telegram
 
 1. `/newbot` at [@BotFather](https://t.me/BotFather), keep the token.
-2. Add the bot to your group and make it an admin (forum topics need it).
-3. Get the chat id (`-100…`): forward a group message to [@getidsbot](https://t.me/getidsbot), or open the group in [web.telegram.org](https://web.telegram.org/a/) and read the URL fragment. Topic ids are the number after `_` in a topic's URL. The General topic needs no id.
+2. Add the bot to your group and make it an admin.
+3. Get the chat id (`-100…`): forward a group message to [@getidsbot](https://t.me/getidsbot), or open the group in [web.telegram.org](https://web.telegram.org/a/) and read the URL fragment.
 
 ### 2. GitLab
 
 | Token | Scope | Used for | Required |
 |---|---|---|---|
-| `gitlab.read_token` | `read_api` | approvals, thread counts, force-push detection, log tails, reconciler | no, features degrade gracefully |
-| `gitlab.hooks_token` | `api` | `gitgram sync-hooks` and the card operations (stop, retry, play, run) | only for sync-hooks and operations |
-| `gitlab.webhook_secret` | any string | `X-Gitlab-Token` on each delivery | yes |
+| `GITGRAM_GITLAB_TOKEN` | `read_api` | diff stats, failure logs, artifacts, force-push detection, reconciler | no, features degrade gracefully |
+| `GITGRAM_GITLAB_HOOKS_TOKEN` | `api` | `gitgram sync-hooks` and the Stop, Retry and Run buttons | only for sync-hooks and buttons |
+| `GITGRAM_WEBHOOK_SECRET` | any string | `X-Gitlab-Token` on each delivery | yes |
 
 One token with `api` covers both. A group access token works too.
 
@@ -53,57 +52,38 @@ Prebuilt multi-arch images (amd64, arm64) live at `ghcr.io/esauvisky/gitgram`. N
 ```sh
 mkdir gitgram && cd gitgram
 curl -fsSLO https://raw.githubusercontent.com/esauvisky/gitgram/main/docker-compose.yml
-curl -fsSL  https://raw.githubusercontent.com/esauvisky/gitgram/main/config.example.yaml -o config.yaml
-# edit config.yaml: chat_id, group, threads, users
-cat > .env <<EOF
-GITGRAM_TELEGRAM_TOKEN=...
-GITGRAM_TG_WEBHOOK_SECRET=$(openssl rand -hex 24)
-GITGRAM_WEBHOOK_SECRET=$(openssl rand -hex 24)
-GITGRAM_GITLAB_TOKEN=...
-GITGRAM_GITLAB_HOOKS_TOKEN=...
-EOF
+curl -fsSL  https://raw.githubusercontent.com/esauvisky/gitgram/main/.env.example -o .env
+# edit .env: token, chat id, group, public URL, secrets (openssl rand -hex 24)
 docker compose up -d
-docker compose exec gitgram /gitgram sync-hooks --config /config/config.yaml --dry-run
-docker compose exec gitgram /gitgram sync-hooks --config /config/config.yaml
+docker compose exec gitgram /gitgram sync-hooks --dry-run
+docker compose exec gitgram /gitgram sync-hooks
 ```
 
-Put a TLS-terminating reverse proxy in front of `127.0.0.1:8080` and set `server.public_base_url` to whatever GitLab can reach. In `telegram.mode: polling` Telegram needs no public URL at all; GitLab still does.
+Put a TLS-terminating reverse proxy in front of `127.0.0.1:8080` and set `GITGRAM_PUBLIC_URL` to whatever GitLab can reach. With `GITGRAM_TELEGRAM_MODE=polling` Telegram needs no public URL at all; GitLab still does.
 
-Pin a version with `VERSION=0.1.0 docker compose up -d`. To build locally instead of pulling: clone the repo and `docker compose up -d --build`. Without Docker: `go run ./cmd/gitgram serve --config config.yaml --poll`, and set `storage.path` to somewhere writable.
+Pin a version with `VERSION=0.1.0 docker compose up -d`. To build locally instead of pulling: clone the repo and `docker compose up -d --build`. Without Docker: `set -a; . ./.env; set +a; go run ./cmd/gitgram serve --poll`, with `GITGRAM_DB` pointing somewhere writable.
 
 ## Configuration
 
-`${VAR}` and `${VAR:-default}` are expanded before parsing. Unknown keys are rejected. Every validation error is reported in one go, not one per restart.
+Everything comes from `GITGRAM_*` environment variables; under Docker Compose that is the `.env` file next to `docker-compose.yml` (start from `.env.example`). Every problem is reported in one go, not one per restart.
 
-| Key | Default | Meaning |
+| Variable | Default | Meaning |
 |---|---|---|
-| `telegram.token` | required | bot token |
-| `telegram.chat_id` | required | target group (`-100…`), or several separated by commas (`-100…, -100…`); every card goes to each, edited in each. The first is the primary: forum topics (`threads`) apply there, the others get cards in General |
-| `telegram.mode` | `webhook` | `webhook` or `polling` |
-| `telegram.webhook_secret` | required in webhook mode | URL suffix and `secret_token` for Telegram updates |
-| `telegram.threads` | | `<event class>: <topic id>`, plus `default` |
-| `server.listen` | `:8080` | listen address |
-| `server.public_base_url` | required for webhook mode and sync-hooks | external base URL |
-| `server.gitlab_webhook_path` | `/webhook/gitlab` | GitLab delivery path |
-| `server.telegram_webhook_path` | `/webhook/telegram` | Telegram update path (secret appended) |
-| `gitlab.base_url` | `https://gitlab.com` | instance URL |
-| `gitlab.group` | required | top-level group; subgroups included |
-| `gitlab.read_token` | | `read_api` token |
-| `gitlab.hooks_token` | | `api` token for sync-hooks |
-| `gitlab.webhook_secret` | required | `X-Gitlab-Token` value |
-| `storage.path` | `/data/gitgram.db` | SQLite file |
-| `logging.level` / `logging.format` | `info` / `text` | slog level; `text` or `json` |
-| `defaults.events` | all | subset of `push pipeline` |
-| `defaults.verbosity` | `normal` | `quiet` (final state only), `normal`, `verbose` (per-job lines, queued time) |
-| `defaults.branches.allow` / `.deny` | `["*"]` / `[]` | globs (`release/*`) or `re:` regexps; deny wins |
-| `defaults.pipelines.child_cards` | `inline` | `inline` (in parent card), `own`, `both` |
-| `defaults.pipelines.quiet_success` | `true` | with `quiet`: stay silent on success |
-| `defaults.pipelines.log_tail.lines` | `10` | log lines shown for a failed job; `0` disables them |
-| `defaults.push.max_commits` | `10` | commits listed per push |
-| `projects[]` | | `path: group/project` plus any `defaults` key and `threads` |
-| `users` | | `gitlab_username: telegram_user_id`; unused while cards never mention people |
-
-Events from projects outside `gitlab.group` are ignored unless listed in `projects[]`.
+| `GITGRAM_TELEGRAM_TOKEN` | required | bot token |
+| `GITGRAM_CHAT_ID` | required | target group (`-100…`), or several separated by commas; every card goes to each and is edited in each. The first is the primary, the one the bot's bookkeeping follows |
+| `GITGRAM_TELEGRAM_MODE` | `webhook` | `webhook` or `polling` |
+| `GITGRAM_TG_WEBHOOK_SECRET` | required in webhook mode | URL suffix and `secret_token` for Telegram updates |
+| `GITGRAM_PUBLIC_URL` | required for webhook mode and sync-hooks | external base URL; GitLab delivers to `/webhook/gitlab`, Telegram to `/webhook/telegram/<secret>` |
+| `GITGRAM_LISTEN` | `:8080` | listen address |
+| `GITGRAM_GITLAB_URL` | `https://gitlab.com` | instance URL |
+| `GITGRAM_GITLAB_GROUP` | required | top-level group; subgroups included, other projects ignored |
+| `GITGRAM_WEBHOOK_SECRET` | required | `X-Gitlab-Token` value |
+| `GITGRAM_GITLAB_TOKEN` | | `read_api` token |
+| `GITGRAM_GITLAB_HOOKS_TOKEN` | | `api` token for sync-hooks and the buttons |
+| `GITGRAM_LOG_LINES` | `10` | log lines shown for a failed job; `0` disables them |
+| `GITGRAM_MAX_COMMITS` | `10` | commits listed per push |
+| `GITGRAM_DB` | `/data/gitgram.db` | SQLite file |
+| `GITGRAM_LOG_LEVEL` / `GITGRAM_LOG_FORMAT` | `info` / `text` | slog level; `text` or `json` |
 
 ## Webhooks
 
@@ -123,7 +103,7 @@ Endpoint: `POST <public_base_url>/webhook/gitlab`. Events to enable: Push, Job, 
 
 ## Preview
 
-`gitgram preview --config config.yaml` sends a mock card of every kind and scenario to the configured chat: pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, and a passing and a manual pipeline. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview --config /config/config.yaml`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
+`gitgram preview` sends a mock card of every kind and scenario to the configured chats: pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, and a passing and a manual pipeline. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
 
 ## Not supported yet
 

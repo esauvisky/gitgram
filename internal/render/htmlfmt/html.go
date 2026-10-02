@@ -20,9 +20,6 @@ func Esc(text string) string { return escaper.Replace(text) }
 // A renders a link. text is escaped; url is escaped for the attribute.
 func A(text, url string) string { return `<a href="` + Esc(url) + `">` + Esc(text) + `</a>` }
 
-// B renders bold text.
-func B(text string) string { return "<b>" + Esc(text) + "</b>" }
-
 // I renders italic text.
 func I(text string) string { return "<i>" + Esc(text) + "</i>" }
 

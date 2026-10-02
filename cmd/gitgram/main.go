@@ -3,9 +3,12 @@
 //
 // Subcommands:
 //
-//	serve       --config path [--poll]
-//	sync-hooks  --config path [--dry-run] [--group-hook]
-//	preview     --config path [--scenario all] [--delay 4s] [--db path]
+//	serve       [--poll]
+//	sync-hooks  [--dry-run] [--group-hook]
+//	preview     [--scenario all] [--delay 4s] [--db path]
+//
+// Settings come from GITGRAM_* environment variables.
+//
 //	healthcheck [--url http://127.0.0.1:8080/healthz]
 package main
 
@@ -19,8 +22,6 @@ import (
 
 	"github.com/esauvisky/gitgram/internal/ops"
 )
-
-const defaultConfigPath = "config.yaml"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -59,10 +60,12 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `gitgram %s
 
 Usage:
-  gitgram serve       --config %s [--poll]
-  gitgram sync-hooks  --config %s [--dry-run] [--group-hook]
-  gitgram preview     --config %s [--scenario all] [--delay 4s] [--db path]
+  gitgram serve       [--poll]
+  gitgram sync-hooks  [--dry-run] [--group-hook]
+  gitgram preview     [--scenario all] [--delay 4s] [--db path]
   gitgram healthcheck [--url http://127.0.0.1:8080/healthz]
   gitgram version
-`, ops.Version, defaultConfigPath, defaultConfigPath, defaultConfigPath)
+
+Settings come from GITGRAM_* environment variables (see README).
+`, ops.Version)
 }

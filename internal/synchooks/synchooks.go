@@ -18,15 +18,10 @@ type Options struct {
 	// Group is the top-level GitLab group path (or numeric id).
 	Group string
 	// WebhookURL is the public URL GitLab must deliver to
-	// (server.public_base_url + server.gitlab_webhook_path).
+	// (GITGRAM_PUBLIC_URL + /webhook/gitlab).
 	WebhookURL string
-	// Secret is the X-Gitlab-Token value (gitlab.webhook_secret).
+	// Secret is the X-Gitlab-Token value (GITGRAM_WEBHOOK_SECRET).
 	Secret string
-	// Events maps config event classes (push, tag, pipeline, mr, mr_note,
-	// issue, issue_note, release, deployment) to enabled. Pass the union of
-	// every class any project may use; per-project filtering happens in the
-	// bot.
-	Events map[string]bool
 	// DryRun prints the planned changes without calling POST/PUT.
 	DryRun bool
 	// GroupHook registers a single hook on the group instead of one per
@@ -49,10 +44,7 @@ type target struct {
 // always PUT so the secret is re-applied even when reported unchanged.
 // It returns an error if any target failed.
 func Run(ctx context.Context, c *api.Client, opts Options, out io.Writer) error {
-	spec, err := hookSpec(opts)
-	if err != nil {
-		return err
-	}
+	spec := hookSpec(opts)
 
 	var targets []target
 	if opts.GroupHook {

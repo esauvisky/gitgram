@@ -27,7 +27,7 @@ const (
 // reader it returns at once.
 func (e *Engine) RunReconciler(ctx context.Context, every time.Duration) {
 	if e.api == nil {
-		e.log.Info("reconciler disabled: no gitlab.read_token")
+		e.log.Info("reconciler disabled: no GITGRAM_GITLAB_TOKEN")
 		return
 	}
 	t := time.NewTicker(every)
@@ -94,9 +94,8 @@ func (e *Engine) reconcileFetchError(ctx context.Context, row store.ObjectRow, e
 // applySynthetic runs a reconciler-built event through apply, bypassing
 // delivery dedupe, and wakes the sender on success.
 func (e *Engine) applySynthetic(ctx context.Context, ev event.Event, en enrichment) {
-	eff := e.cfg.Resolve(ev.Proj().Path)
 	err := e.st.WithTx(ctx, func(tx *store.Tx) error {
-		return e.apply(ctx, tx, eff, ev, en)
+		return e.apply(ctx, tx, ev, en)
 	})
 	if err != nil {
 		e.log.Error("reconcile: apply failed", "kind", ev.EventKind(), "project", ev.Proj().Path, "err", err)

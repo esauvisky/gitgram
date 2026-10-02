@@ -7,14 +7,8 @@ services:
         VERSION: ${VERSION:-dev}
     restart: unless-stopped
     read_only: true
-    environment:
-      GITGRAM_TELEGRAM_TOKEN: ${GITGRAM_TELEGRAM_TOKEN:?required}
-      GITGRAM_TG_WEBHOOK_SECRET: ${GITGRAM_TG_WEBHOOK_SECRET:?required}
-      GITGRAM_GITLAB_TOKEN: ${GITGRAM_GITLAB_TOKEN:-}
-      GITGRAM_GITLAB_HOOKS_TOKEN: ${GITGRAM_GITLAB_HOOKS_TOKEN:-}
-      GITGRAM_WEBHOOK_SECRET: ${GITGRAM_WEBHOOK_SECRET:?required}
+    env_file: .env              # every setting; see .env.example
     volumes:
-      - ./config.yaml:/config/config.yaml:ro
       - data:/data
     ports:
       - "8080:8080"
