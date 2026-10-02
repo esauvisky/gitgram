@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/esauvisky/gitgram/internal/config"
 	"github.com/esauvisky/gitgram/internal/engine"
+	"github.com/esauvisky/gitgram/internal/gitlab/api"
 	"github.com/esauvisky/gitgram/internal/ops"
 	"github.com/esauvisky/gitgram/internal/preview"
 	"github.com/esauvisky/gitgram/internal/store"
@@ -86,7 +88,9 @@ func runPreviewWith(ctx context.Context, cfg *config.Config, client *telegram.Cl
 	defer st.Close()
 
 	var sender *telegram.Sender
-	eng := engine.New(cfg, st, nil, nil, func() { sender.Notify() }, logger)
+	// The stand-in writer only makes the cards draw their buttons; presses
+	// land on the live bot, never here.
+	eng := engine.New(cfg, st, nil, previewWriter{}, func() { sender.Notify() }, logger)
 	sender = telegram.NewSender(client, chats, outboxAdapter{st: st, primary: chats[0]}, eng, logger)
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	senderDone := make(chan struct{})
@@ -98,4 +102,23 @@ func runPreviewWith(ctx context.Context, cfg *config.Config, client *telegram.Cl
 	cancelRun()
 	<-senderDone
 	return runErr
+}
+
+// previewWriter is the GitLab writer of a preview engine: present so cards
+// draw Stop, Retry and Run, never called because button presses reach the
+// serving bot's engine.
+type previewWriter struct{}
+
+var errPreviewWriter = errors.New("preview cards have no GitLab behind them")
+
+func (previewWriter) CancelPipeline(context.Context, int64, int64) (*api.Pipeline, error) {
+	return nil, errPreviewWriter
+}
+
+func (previewWriter) RetryPipeline(context.Context, int64, int64) (*api.Pipeline, error) {
+	return nil, errPreviewWriter
+}
+
+func (previewWriter) PlayJob(context.Context, int64, int64) (*api.Job, error) {
+	return nil, errPreviewWriter
 }
