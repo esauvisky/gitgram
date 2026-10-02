@@ -141,6 +141,17 @@ func (s *PushState) SetPipeline(p *PipelineState) (changed bool) {
 	return differs(before, s)
 }
 
+// ReleasePipeline drops the pipeline from the card: it was not triggered
+// by this push after all. Reports whether anything changed.
+func (s *PushState) ReleasePipeline() (changed bool) {
+	if s.Pipeline == nil {
+		return false
+	}
+	s.Pipeline, s.Absorbs = nil, false
+	s.recomputeFinal()
+	return true
+}
+
 // SetDiff records the diff stats and reports whether they changed.
 func (s *PushState) SetDiff(d DiffStats) (changed bool) {
 	if s.Diff != nil && s.Diff.FilesChanged == d.FilesChanged && s.Diff.Added == d.Added && s.Diff.Removed == d.Removed && s.Diff.Partial == d.Partial && slices.Equal(s.Diff.Files, d.Files) {

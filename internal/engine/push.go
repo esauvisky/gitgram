@@ -82,67 +82,106 @@ func (e *Engine) supersedePush(ctx context.Context, tx *store.Tx, eff config.Eff
 	return e.enqueueCard(ctx, tx, prevKey, eff.ThreadFor(config.EventPush), card, true)
 }
 
-// syncPipelinePush copies a pipeline's state into the push card of its
-// (branch, sha), creating a skeleton when the Push Hook has not arrived
-// yet, records push → pipeline, and enqueues the push card. It reports
-// whether the push card absorbs the pipeline: a push-triggered pipeline
-// that had no card of its own when it first met a live push card renders
-// inside that card instead of getting one. Child, tag and non-branch refs
-// are skipped, as are projects without push cards.
-func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.Key, st *cards.PipelineState, received time.Time) (bool, error) {
+// syncPipelinePush keeps the push card of a pipeline's (branch, sha) in
+// step with it. Only a pipeline the Pipeline Hook confirms as triggered by
+// a push (source "push") is attached: its state is copied into the push
+// card, a skeleton is created when the Push Hook has not arrived yet, and
+// push → pipeline is recorded. The push card absorbs it (renders it in full
+// and the pipeline gets no card of its own) when the pipeline had no card
+// when it first met a live push card.
+//
+// A pipeline from anywhere else (web, api, schedule, ...) never touches the
+// push card, and one attached before its source was known is released.
+// While the source is still unknown (Job Hooks usually arrive before the
+// Pipeline Hook) and a live push card exists for the commit, hold reports
+// that no card should be posted yet. Child, tag and non-branch refs are
+// skipped, as are projects without push cards.
+func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.Key, st *cards.PipelineState, received time.Time) (absorbed, hold bool, err error) {
 	if st.Parent != nil || st.Tag || st.SHA == "" || st.Ref == "" || strings.HasPrefix(st.Ref, "refs/") {
-		return false, nil
+		return false, false, nil
 	}
 	eff := e.cfg.Resolve(st.Project.Path)
 	if !eff.EventEnabled(config.EventPush) {
-		return false, nil
+		return false, false, nil
 	}
 	pk := cards.PushKey(st.Project.ID, st.Ref, st.SHA)
 	push, row, err := load[cards.PushState](ctx, tx, pk, e.log)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
+	confirmed := st.SeenPipelineEvent && st.Source == "push"
 	if row == nil {
-		if st.Source != "" && st.Source != "push" {
-			return false, nil
+		if !confirmed {
+			return false, false, nil
 		}
 		push = cards.NewPushSkeleton(st.Project, st.Ref, st.SHA)
 	}
-	if push.Superseded && !push.Absorbs {
-		return false, nil
+	if push.Pipeline != nil && st.ID < push.Pipeline.ID {
+		return false, false, nil
 	}
-	if push.Pipeline == nil || push.Pipeline.ID != st.ID || !push.Absorbs {
+	mine := push.Pipeline != nil && push.Pipeline.ID == st.ID
+
+	if !confirmed {
+		if !st.SeenPipelineEvent && push.SeenPush && !push.Superseded {
+			ownCard, err := tx.GetCard(ctx, skey(key))
+			if err != nil {
+				return false, false, err
+			}
+			if ownCard == nil {
+				return false, true, nil
+			}
+		}
+		if !mine || !st.SeenPipelineEvent || !push.ReleasePipeline() {
+			return false, false, nil
+		}
+		if err := put(ctx, tx, pk, push, push.Final, row.LastEventAt); err != nil {
+			return false, false, err
+		}
+		if !push.SeenPush {
+			return false, false, nil
+		}
+		card, err := tx.GetCard(ctx, skey(pk))
+		if err != nil {
+			return false, false, err
+		}
+		return false, false, e.enqueueCard(ctx, tx, pk, eff.ThreadFor(config.EventPush), card, push.Final)
+	}
+
+	if push.Superseded && !push.Absorbs {
+		return false, false, nil
+	}
+	if !mine || !push.Absorbs {
 		ownCard, err := tx.GetCard(ctx, skey(key))
 		if err != nil {
-			return false, err
+			return false, false, err
 		}
-		push.Absorbs = push.SeenPush && ownCard == nil && (st.Source == "" || st.Source == "push")
+		push.Absorbs = push.SeenPush && ownCard == nil
 	}
-	changed := push.SetPipeline(st)
-	if !changed {
-		return push.Absorbs, nil
+	if !push.SetPipeline(st) {
+		return push.Absorbs, false, nil
 	}
 	if err := put(ctx, tx, pk, push, push.Final, latest(row, received)); err != nil {
-		return false, err
+		return false, false, err
 	}
 	if err := tx.AddLink(ctx, store.Link{From: skey(pk), Rel: relPushPipeline, To: skey(key)}); err != nil {
-		return false, err
+		return false, false, err
 	}
 	if !push.SeenPush {
-		return false, nil
+		return false, false, nil
 	}
 	card, err := tx.GetCard(ctx, skey(pk))
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
-	return push.Absorbs, e.enqueueCard(ctx, tx, pk, eff.ThreadFor(config.EventPush), card, push.Final)
+	return push.Absorbs, false, e.enqueueCard(ctx, tx, pk, eff.ThreadFor(config.EventPush), card, push.Final)
 }
 
 // publishPipeline pushes a changed pipeline state to whichever card shows
-// it: the push card that absorbs it, or its own card.
+// it: the push card that absorbs it, or its own card, which waits while
+// the pipeline's source is unknown and a push card might claim it.
 func (e *Engine) publishPipeline(ctx context.Context, tx *store.Tx, eff config.EffectiveProject, key cards.Key, st *cards.PipelineState, received time.Time) error {
-	absorbed, err := e.syncPipelinePush(ctx, tx, key, st, received)
-	if err != nil || absorbed {
+	absorbed, hold, err := e.syncPipelinePush(ctx, tx, key, st, received)
+	if err != nil || absorbed || hold {
 		return err
 	}
 	return e.enqueuePipelineCard(ctx, tx, eff, st)
