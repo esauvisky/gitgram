@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -126,14 +125,11 @@ type Pipelines struct {
 	LogTail      LogTail `yaml:"log_tail"`
 }
 
-// LogTail tunes the job log tails on pipeline cards: the last LiveLines of
-// each running job's log (one job per stage), refreshed every Interval and
-// removed when the job passes, and the last Lines of each failed job's log,
-// kept. Lines 0 disables both. Needs gitlab.read_token.
+// LogTail tunes the failed-job log on pipeline cards: the last Lines of the
+// failed job's log, shown under its stage. Lines 0 disables it. Needs
+// gitlab.read_token.
 type LogTail struct {
-	Lines     *int           `yaml:"lines"`
-	LiveLines *int           `yaml:"live_lines"`
-	Interval  *time.Duration `yaml:"interval"`
+	Lines *int `yaml:"lines"`
 }
 
 // MR tunes merge request cards.
@@ -233,12 +229,6 @@ func (c *Config) applyDefaults() {
 	}
 	if d.Pipelines.LogTail.Lines == nil {
 		d.Pipelines.LogTail.Lines = ptr(10)
-	}
-	if d.Pipelines.LogTail.LiveLines == nil {
-		d.Pipelines.LogTail.LiveLines = ptr(10)
-	}
-	if d.Pipelines.LogTail.Interval == nil {
-		d.Pipelines.LogTail.Interval = ptr(15 * time.Second)
 	}
 	if d.MR.CollapseNotes == nil {
 		d.MR.CollapseNotes = ptr(false)

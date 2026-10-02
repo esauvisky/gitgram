@@ -24,7 +24,7 @@ defaults:
   events: [push, tag, pipeline, mr, mr_note, issue, issue_note, release, deployment]
   verbosity: normal
   branches: { allow: ["*"], deny: ["renovate/*"] }
-  pipelines: { child_cards: inline, quiet_success: true, log_tail: { lines: 10, live_lines: 10, interval: 15s } }
+  pipelines: { child_cards: inline, quiet_success: true, log_tail: { lines: 10 } }
   mr: { collapse_notes: false, show_description: true, show_system_notes: false }
   push: { max_commits: 10 }
 projects:                       # optional per-project overrides, matched by path

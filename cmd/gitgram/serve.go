@@ -163,7 +163,6 @@ func runServe(ctx context.Context, args []string) error {
 		sender.Run(runCtx)
 	}()
 	go eng.RunReconciler(runCtx, reconcileInterval)
-	go eng.RunLogTail(runCtx, cfg.Resolve("").Pipelines.LogTailInterval)
 	go eng.RunJanitor(runCtx, janitorInterval)
 
 	errc := make(chan error, 1)

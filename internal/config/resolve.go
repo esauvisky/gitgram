@@ -2,7 +2,6 @@ package config
 
 import (
 	"strings"
-	"time"
 )
 
 // EffectiveProject is the fully merged view of the settings that apply to
@@ -23,11 +22,9 @@ type EffectiveProject struct {
 
 // PipelineSettings is the resolved `pipelines:` block.
 type PipelineSettings struct {
-	ChildCards       string
-	QuietSuccess     bool
-	LogTailLines     int
-	LogTailLiveLines int
-	LogTailInterval  time.Duration
+	ChildCards   string
+	QuietSuccess bool
+	LogTailLines int
 }
 
 // MRSettings is the resolved `mr:` block.
@@ -53,7 +50,7 @@ func (c *Config) Resolve(projectPath string) EffectiveProject {
 		Branches:  d.Branches,
 		Pipelines: PipelineSettings{
 			ChildCards: d.Pipelines.ChildCards, QuietSuccess: *d.Pipelines.QuietSuccess,
-			LogTailLines: *d.Pipelines.LogTail.Lines, LogTailLiveLines: *d.Pipelines.LogTail.LiveLines, LogTailInterval: *d.Pipelines.LogTail.Interval,
+			LogTailLines: *d.Pipelines.LogTail.Lines,
 		},
 		MR: MRSettings{
 			CollapseNotes:   *d.MR.CollapseNotes,
@@ -93,12 +90,6 @@ func (p *EffectiveProject) apply(s *Settings) {
 	}
 	if s.Pipelines.LogTail.Lines != nil {
 		p.Pipelines.LogTailLines = *s.Pipelines.LogTail.Lines
-	}
-	if s.Pipelines.LogTail.LiveLines != nil {
-		p.Pipelines.LogTailLiveLines = *s.Pipelines.LogTail.LiveLines
-	}
-	if s.Pipelines.LogTail.Interval != nil {
-		p.Pipelines.LogTailInterval = *s.Pipelines.LogTail.Interval
 	}
 	if s.MR.CollapseNotes != nil {
 		p.MR.CollapseNotes = *s.MR.CollapseNotes

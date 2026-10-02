@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-	"time"
 )
 
 // validate checks every field and compiles branch matchers. It returns one
@@ -129,12 +128,6 @@ func (s *Settings) validate(field string) []error {
 	}
 	if s.Pipelines.LogTail.Lines != nil && (*s.Pipelines.LogTail.Lines < 0 || *s.Pipelines.LogTail.Lines > 50) {
 		bad("pipelines.log_tail.lines: must be 0..50, got %d", *s.Pipelines.LogTail.Lines)
-	}
-	if s.Pipelines.LogTail.LiveLines != nil && (*s.Pipelines.LogTail.LiveLines < 1 || *s.Pipelines.LogTail.LiveLines > 20) {
-		bad("pipelines.log_tail.live_lines: must be 1..20, got %d", *s.Pipelines.LogTail.LiveLines)
-	}
-	if s.Pipelines.LogTail.Interval != nil && *s.Pipelines.LogTail.Interval < 5*time.Second {
-		bad("pipelines.log_tail.interval: must be at least 5s, got %s", *s.Pipelines.LogTail.Interval)
 	}
 	if s.Push.MaxCommits != nil && *s.Push.MaxCommits < 1 {
 		bad("push.max_commits: must be at least 1, got %d", *s.Push.MaxCommits)
