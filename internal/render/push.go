@@ -41,10 +41,6 @@ func Push(s *cards.PushState, maxCommits int, o Options) Message {
 	case s.Pipeline != nil && s.Absorbs:
 		v := viewPipeline(s.Pipeline)
 		pipelineBody(s.Pipeline, v, o, &b)
-		if a := artifactsLine(s.Pipeline); a != "" {
-			b.Line("")
-			small(&b, a)
-		}
 		kb = pipelineKeyboard(s.Pipeline, v, o)
 	case s.Pipeline != nil:
 		sum := s.Pipeline.PipelineSummary()

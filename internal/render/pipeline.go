@@ -32,9 +32,8 @@ func viewPipeline(s *cards.PipelineState) *pipelineView {
 
 // Pipeline renders a pipeline card: the title (`@emi ran pipeline #84 in
 // demo (main)`, fixed once posted), the commit quoted like a push's commit
-// row, one line per stage that carries the result (mark, state, time, the
-// failed job's log under its stage), and after a blank line a small line
-// with the artifacts. A pipeline that a push card
+// row, and one line per stage that carries the result (mark, state, time,
+// artifacts, the failed job's log under its stage). A pipeline that a push card
 // absorbs is rendered there instead with the same stage lines.
 func Pipeline(s *cards.PipelineState, o Options) Message {
 	v := viewPipeline(s)
@@ -55,11 +54,6 @@ func Pipeline(s *cards.PipelineState, o Options) Message {
 		b.Quote(commitLine(s.Commit, commitAuthor(s.Commit, s.Triggerer)), false)
 	}
 	pipelineBody(s, v, o, &b)
-
-	if a := artifactsLine(s); a != "" {
-		b.Line("")
-		small(&b, a)
-	}
 	taglineFooter(&b, "pipeline:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.ID, 10))
 	return Message{HTML: b.Truncate(o.limit(), s.URL), Keyboard: pipelineKeyboard(s, v, o)}
 }
@@ -85,7 +79,7 @@ func pipelineBody(s *cards.PipelineState, v *pipelineView, o Options, b *htmlfmt
 	}
 	for _, st := range stages {
 		line, logJob := stageLine(st)
-		b.Line(line)
+		b.Line(line + stageArtifacts(s, st))
 		if t, ok := s.Tails[logJob]; ok && logJob != 0 && len(t.Lines) > 0 {
 			b.Line(htmlfmt.Pre(strings.Join(t.Lines, "\n"), "log"))
 		}
@@ -109,16 +103,31 @@ func pipelineBody(s *cards.PipelineState, v *pipelineView, o Options, b *htmlfmt
 	}
 }
 
-// artifactsLine lists the artifact archives with download links.
-func artifactsLine(s *cards.PipelineState) string {
-	if len(s.Artifacts) == 0 {
+// stageArtifacts is the artifact archives of a stage's jobs, appended to
+// its line in italics with download links: ` (artifacts, 88.7 MB)`, or each named by
+// job when the stage has several (` (build artifacts, 88.7 MB · lint
+// artifacts, 1 KB)`). Empty when the stage has none.
+func stageArtifacts(s *cards.PipelineState, st stageGroup) string {
+	var arts []cards.Artifact
+	for _, a := range s.Artifacts {
+		for _, j := range st.jobs {
+			if j.ID == a.JobID {
+				arts = append(arts, a)
+			}
+		}
+	}
+	if len(arts) == 0 {
 		return ""
 	}
-	parts := make([]string, len(s.Artifacts))
-	for i, a := range s.Artifacts {
-		parts[i] = htmlfmt.A(a.JobName, s.Project.WebURL+"/-/jobs/"+strconv.FormatInt(a.JobID, 10)+"/artifacts/download") + " " + htmlfmt.Size(a.Size)
+	parts := make([]string, len(arts))
+	for i, a := range arts {
+		label := "artifacts"
+		if len(arts) > 1 {
+			label = a.JobName + " artifacts"
+		}
+		parts[i] = htmlfmt.A(label, s.Project.WebURL+"/-/jobs/"+strconv.FormatInt(a.JobID, 10)+"/artifacts/download") + ", " + htmlfmt.Size(a.Size)
 	}
-	return "Artifacts: " + strings.Join(parts, " · ")
+	return " <i>(" + strings.Join(parts, " · ") + ")</i>"
 }
 
 // pipelinePhrase is the outcome as a lowercase verb phrase: failed,
