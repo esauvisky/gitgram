@@ -31,6 +31,9 @@ type Telegram struct {
 	// ChatIDs receive every card; the first is the primary, the one the
 	// bot's bookkeeping follows.
 	ChatIDs []int64
+	// DebugChatID, when set, is where `gitgram preview` sends its mock
+	// cards instead of ChatIDs; /preview is accepted there too.
+	DebugChatID int64
 	// Mode is webhook or polling.
 	Mode          string
 	WebhookSecret string
@@ -135,6 +138,13 @@ func Load(overrides ...func(*Config)) (*Config, error) {
 			c.Telegram.ChatIDs = append(c.Telegram.ChatIDs, id)
 		}
 	}
+	if raw := env("GITGRAM_DEBUG_CHAT_ID", ""); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id == 0 {
+			bad("GITGRAM_DEBUG_CHAT_ID: %q is not a chat id", raw)
+		}
+		c.Telegram.DebugChatID = id
+	}
 	for _, o := range overrides {
 		o(c)
 	}
@@ -179,6 +189,24 @@ func Load(overrides ...func(*Config)) (*Config, error) {
 		return nil, fmt.Errorf("config: %w", errors.Join(errs...))
 	}
 	return c, nil
+}
+
+// CommandChats are the chats the bot answers slash commands in: every
+// card chat and the debug chat.
+func (c *Config) CommandChats() []int64 {
+	if c.Telegram.DebugChatID == 0 {
+		return c.Telegram.ChatIDs
+	}
+	return append(append([]int64{}, c.Telegram.ChatIDs...), c.Telegram.DebugChatID)
+}
+
+// PreviewChats are where `gitgram preview` sends its mock cards: the debug
+// chat when set, otherwise every card chat.
+func (c *Config) PreviewChats() []int64 {
+	if c.Telegram.DebugChatID != 0 {
+		return []int64{c.Telegram.DebugChatID}
+	}
+	return c.Telegram.ChatIDs
 }
 
 // Accepts reports whether a project path belongs to the configured group

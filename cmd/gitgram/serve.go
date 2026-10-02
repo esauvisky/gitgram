@@ -78,7 +78,7 @@ func runServe(ctx context.Context, args []string) error {
 	var sender *telegram.Sender
 	var eng *engine.Engine
 	client, err := telegram.New(cfg.Telegram.Token, telegram.Options{
-		ChatIDs:       cfg.Telegram.ChatIDs,
+		ChatIDs:       cfg.CommandChats(),
 		Mode:          cfg.Telegram.Mode,
 		PublicURL:     cfg.Server.PublicBaseURL,
 		WebhookPath:   cfg.Server.TelegramWebhookPath,

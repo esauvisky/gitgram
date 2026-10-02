@@ -71,6 +71,7 @@ Everything comes from `GITGRAM_*` environment variables; under Docker Compose th
 |---|---|---|
 | `GITGRAM_TELEGRAM_TOKEN` | required | bot token |
 | `GITGRAM_CHAT_ID` | required | target group (`-100…`), or several separated by commas; every card goes to each and is edited in each. The first is the primary, the one the bot's bookkeeping follows |
+| `GITGRAM_DEBUG_CHAT_ID` | | chat that receives `gitgram preview` mock cards instead of `GITGRAM_CHAT_ID`; `/preview` works there too |
 | `GITGRAM_TELEGRAM_MODE` | `webhook` | `webhook` or `polling` |
 | `GITGRAM_TG_WEBHOOK_SECRET` | required in webhook mode | URL suffix and `secret_token` for Telegram updates |
 | `GITGRAM_PUBLIC_URL` | required for webhook mode and sync-hooks | external base URL; GitLab delivers to `/webhook/gitlab`, Telegram to `/webhook/telegram/<secret>` |
@@ -103,7 +104,7 @@ Endpoint: `POST <public_base_url>/webhook/gitlab`. Events to enable: Push, Job, 
 
 ## Preview
 
-`gitgram preview` sends a mock card of every kind and scenario to the configured chats: pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, and a passing and a manual pipeline. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
+`gitgram preview` sends a mock card of every kind and scenario to `GITGRAM_DEBUG_CHAT_ID` (or, without one, to every `GITGRAM_CHAT_ID` chat): pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, and a passing and a manual pipeline. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
 
 ## Not supported yet
 

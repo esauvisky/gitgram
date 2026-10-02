@@ -40,7 +40,7 @@ func runPreview(ctx context.Context, args []string) error {
 		return err
 	}
 	logger := ops.SetupLogging(cfg.Logging.Level, cfg.Logging.Format)
-	client, err := telegram.New(cfg.Telegram.Token, telegram.Options{ChatIDs: cfg.Telegram.ChatIDs, Mode: telegram.ModePolling, Logger: logger})
+	client, err := telegram.New(cfg.Telegram.Token, telegram.Options{ChatIDs: cfg.PreviewChats(), Mode: telegram.ModePolling, Logger: logger})
 	if err != nil {
 		return err
 	}
@@ -48,8 +48,8 @@ func runPreview(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	logger.Info("preview: sending mock cards", "bot", username, "chat_ids", cfg.Telegram.ChatIDs, "scenarios", *scenario)
-	if err := runPreviewWith(ctx, cfg, client, cfg.Telegram.ChatIDs, logger, *dbPath, strings.Split(*scenario, ","), *delay); err != nil {
+	logger.Info("preview: sending mock cards", "bot", username, "chat_ids", cfg.PreviewChats(), "scenarios", *scenario)
+	if err := runPreviewWith(ctx, cfg, client, cfg.PreviewChats(), logger, *dbPath, strings.Split(*scenario, ","), *delay); err != nil {
 		return err
 	}
 	fmt.Println("preview: done")
