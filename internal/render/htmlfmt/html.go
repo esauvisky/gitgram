@@ -67,20 +67,6 @@ func Dur(seconds float64) string {
 	return strconv.FormatInt(sec, 10) + "s"
 }
 
-// Clock formats a duration in seconds as m:ss or h:mm:ss, the way the
-// cards show stage times.
-func Clock(seconds float64) string {
-	if seconds < 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) {
-		seconds = 0
-	}
-	s := int64(math.Round(seconds))
-	h, m, sec := s/3600, s%3600/60, s%60
-	if h > 0 {
-		return strconv.FormatInt(h, 10) + ":" + pad2(m) + ":" + pad2(sec)
-	}
-	return strconv.FormatInt(m, 10) + ":" + pad2(sec)
-}
-
 // Size formats bytes as B, KB, MB or GB with one decimal above KB.
 func Size(b int64) string {
 	switch {

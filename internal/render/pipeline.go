@@ -318,7 +318,7 @@ func stageDuration(jobs []cards.JobState) string {
 	if first == nil || last == nil {
 		return ""
 	}
-	return htmlfmt.Clock(last.Sub(*first).Seconds())
+	return htmlfmt.Dur(last.Sub(*first).Seconds())
 }
 
 // jobNames lists jobs as code chips.
@@ -342,10 +342,10 @@ func failureReason(j cards.JobState) string {
 func verboseJob(j cards.JobState) string {
 	l := jobLink(j) + " " + strings.ToLower(statusWord(j.Status, j.AllowFailure))
 	if j.Duration != nil {
-		l += " · " + htmlfmt.Clock(*j.Duration)
+		l += " · " + htmlfmt.Dur(*j.Duration)
 	}
 	if j.QueuedDuration != nil {
-		l += " · queued " + htmlfmt.Clock(*j.QueuedDuration)
+		l += " · queued " + htmlfmt.Dur(*j.QueuedDuration)
 	}
 	if r := failureReason(j); j.Status == event.StatusFailed && r != "" {
 		l += " · " + htmlfmt.Esc(r)
