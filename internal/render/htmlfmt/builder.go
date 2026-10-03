@@ -17,10 +17,10 @@ type Builder struct {
 type line struct {
 	html    string
 	visible int
-	// inner is set for expandable blockquotes, which Truncate shortens
-	// before dropping whole lines.
-	inner      string
-	expandable bool
+	// inner is set for blockquotes, which Truncate shortens before dropping
+	// whole lines.
+	inner string
+	quote bool
 }
 
 // Line appends one line of formatted HTML. An empty string is a blank line.
@@ -29,10 +29,10 @@ func (b *Builder) Line(html string) {
 }
 
 // Quote appends a blockquote holding inner (already-formatted HTML, may span
-// several lines). Expandable quotes are the first thing Truncate shortens.
-func (b *Builder) Quote(inner string, expandable bool) {
-	html := Blockquote(inner, expandable)
-	b.lines = append(b.lines, line{html: html, visible: VisibleLen(html), inner: inner, expandable: expandable})
+// several lines). Quotes are the first thing Truncate shortens.
+func (b *Builder) Quote(inner string) {
+	html := Blockquote(inner)
+	b.lines = append(b.lines, line{html: html, visible: VisibleLen(html), inner: inner, quote: true})
 }
 
 // Len is the visible length of the message including line breaks.
@@ -57,7 +57,7 @@ func (b *Builder) String() string {
 }
 
 // Truncate returns the message shortened to at most limit visible units.
-// Expandable blockquotes are shortened first (at an inner line break when
+// Blockquotes are shortened first (at an inner line break when
 // one falls in the second half of what fits, never inside a tag or entity),
 // then whole lines are dropped from the end. When anything was cut a final
 // "… read more" line pointing at moreURL is appended (just "…" when moreURL
@@ -77,7 +77,7 @@ func (b *Builder) Truncate(limit int, moreURL string) string {
 
 	for i := len(t.lines) - 1; i >= 0 && t.Len() > budget; i-- {
 		l := t.lines[i]
-		if !l.expandable {
+		if !l.quote {
 			continue
 		}
 		allowed := l.visible - (t.Len() - budget) - 1
@@ -91,8 +91,8 @@ func (b *Builder) Truncate(limit int, moreURL string) string {
 		}
 		inner := strings.TrimRight(prefix, " \n")
 		inner += closeOpen(inner) + "…"
-		html := Blockquote(inner, true)
-		t.lines[i] = line{html: html, visible: VisibleLen(html), inner: inner, expandable: true}
+		html := Blockquote(inner)
+		t.lines[i] = line{html: html, visible: VisibleLen(html), inner: inner, quote: true}
 	}
 	for len(t.lines) > 0 && t.Len() > budget {
 		t.lines = t.lines[:len(t.lines)-1]

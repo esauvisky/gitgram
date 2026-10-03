@@ -10,7 +10,8 @@ import (
 )
 
 // Push renders a push card: the title (`@ada pushed to demo (feat/x)`),
-// the force-push warning, the commits as a fold of `author: title` rows
+// the force-push warning (the verb links to the compare view), the commits
+// as a quote of `author: title` rows
 // closed by the line counts in italics, then the pipeline for the pushed
 // head: in full (one line per stage with its time, the failed log, Stop
 // and Retry) when this card absorbs the pipeline the push triggered, as
@@ -18,14 +19,18 @@ import (
 // the listed commits.
 func Push(s *cards.PushState, maxCommits int, o Options) Message {
 	var b htmlfmt.Builder
-	lead, prep := o.who(s.Pusher)+" pushed", "to"
+	verb, prep := "pushed", "to"
 	switch {
 	case s.Created:
-		lead, prep = o.who(s.Pusher)+" created a branch", "in"
+		verb, prep = "created a branch", "in"
 	case s.Forced:
-		lead = o.who(s.Pusher) + " force-pushed"
+		verb = "force-pushed"
 	}
-	headline(&b, lead, prep, s.Project, branchRef(s.Project, s.Branch))
+	what := htmlfmt.Esc(verb)
+	if u := pushMoreURL(s); u != "" {
+		what = htmlfmt.A(verb, u)
+	}
+	headline(&b, o.who(s.Pusher)+" "+what, prep, s.Project, branchRef(s.Project, s.Branch))
 	if s.Forced {
 		small(&b, "⚠️ Force push: the branch history was rewritten")
 	}
@@ -34,7 +39,7 @@ func Push(s *cards.PushState, maxCommits int, o Options) Message {
 		if d := diffSummary(s.Diff); d != "" {
 			rows += "\n\n<i>" + d + "</i>"
 		}
-		b.Quote(rows, true)
+		b.Quote(rows)
 	}
 	var kb [][]Button
 	switch {
@@ -50,14 +55,19 @@ func Push(s *cards.PushState, maxCommits int, o Options) Message {
 	return Message{HTML: b.Truncate(o.limit(), pushMoreURL(s)), Keyboard: kb}
 }
 
-// pushMoreURL is where the commits a card cannot list live: the compare
-// view of the push, or the branch history when the push created it.
+// pushMoreURL is the compare view of the push (previous head to new head),
+// or for a new branch everything since it left the default branch; the
+// branch history when neither is known. The headline's verb and "+N more"
+// link to it.
 func pushMoreURL(s *cards.PushState) string {
 	if s.Project.WebURL == "" {
 		return ""
 	}
 	if s.Before != event.ZeroSHA && s.Before != "" && s.After != "" {
 		return s.Project.WebURL + "/-/compare/" + s.Before + "..." + s.After
+	}
+	if s.Created && s.After != "" && s.Project.DefaultBranch != "" && s.Project.DefaultBranch != s.Branch {
+		return s.Project.WebURL + "/-/compare/" + s.Project.DefaultBranch + "..." + s.After
 	}
 	return s.Project.WebURL + "/-/commits/" + s.Branch
 }

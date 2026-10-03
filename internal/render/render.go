@@ -79,7 +79,7 @@ func actionButton(text string, cb actions.Callback) (Button, bool) {
 //   - the headline: who (bold handle, never a link) did what in which
 //     project (branch); fixed once posted, no emoji;
 //   - small lines, italic: the detail under it;
-//   - the commits fold, an expandable quote.
+//   - quotes for commits and descriptions, always shown in full.
 
 // headline writes the card's title, which never changes once the card is
 // posted: lead (who did what, formatted HTML), the preposition, the linked

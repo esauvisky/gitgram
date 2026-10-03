@@ -35,14 +35,8 @@ func Pre(text, lang string) string {
 // Code renders inline code.
 func Code(text string) string { return "<code>" + Esc(text) + "</code>" }
 
-// Blockquote wraps already-formatted HTML in a blockquote, collapsible when
-// expandable is true.
-func Blockquote(inner string, expandable bool) string {
-	if expandable {
-		return "<blockquote expandable>" + inner + "</blockquote>"
-	}
-	return "<blockquote>" + inner + "</blockquote>"
-}
+// Blockquote wraps already-formatted HTML in a blockquote.
+func Blockquote(inner string) string { return "<blockquote>" + inner + "</blockquote>" }
 
 // Dur formats a duration in seconds as 12s, 4m12s or 1h04m. It is the only
 // place render turns a float into text.
