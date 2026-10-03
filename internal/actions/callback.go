@@ -25,6 +25,8 @@ type Kind byte
 const (
 	KindPipeline Kind = 'p'
 	KindJob      Kind = 'j'
+	// KindMergeRequest targets a merge request; ObjectID is its iid.
+	KindMergeRequest Kind = 'm'
 )
 
 // Action names what the button does.
@@ -41,8 +43,12 @@ const (
 	// ActionPlay starts a manual job (KindJob, ObjectID is the job id).
 	ActionPlay    Action = "play"
 	ActionApprove Action = "approve"
-	ActionMerge   Action = "merge"
-	ActionRefresh Action = "refresh"
+	// ActionMerge asks to merge an MR; the card then offers ActionMergeYes
+	// (merge it) and ActionMergeNo (keep it open).
+	ActionMerge    Action = "merge"
+	ActionMergeYes Action = "mergeyes"
+	ActionMergeNo  Action = "mergeno"
+	ActionRefresh  Action = "refresh"
 )
 
 // Callback is the decoded callback_data of an inline button. The wire format

@@ -10,6 +10,12 @@ type Reader interface {
 	// compares from→to directly instead of via the merge base; a non-empty
 	// Commits for from=after,to=before means the branch history was rewritten.
 	Compare(ctx context.Context, projectID int64, from, to string, straight bool) (*Compare, error)
+	// MRDiscussions pages through GET .../merge_requests/:iid/discussions and
+	// returns the number of unresolved threads.
+	MRDiscussions(ctx context.Context, projectID, iid int64) (int, error)
+	// MRDiffs pages through GET .../merge_requests/:iid/diffs: one entry per
+	// changed file.
+	MRDiffs(ctx context.Context, projectID, iid int64) ([]Diff, error)
 	// Pipeline is GET /projects/:id/pipelines/:pipeline_id.
 	Pipeline(ctx context.Context, projectID, id int64) (*Pipeline, error)
 	// PipelineJobs pages through GET .../pipelines/:pipeline_id/jobs;

@@ -13,12 +13,11 @@ import (
 var (
 	ada   = event.User{ID: 990101, Username: "ada", Name: "Ada Lovelace"}
 	linus = event.User{ID: 990102, Username: "linus", Name: "Linus"}
-	grace = event.User{ID: 990103, Username: "grace", Name: "Grace Hopper"}
 )
 
 const (
 	pipelineID = 991001
-	issueIID   = 7
+	mrIID      = 42
 	sha        = "8f6ded00c0ffee1234567890abcdef1234567890"
 )
 
@@ -105,6 +104,29 @@ func (r *Runner) pipeline(status string, jobs ...event.Job) *event.Pipeline {
 	return p
 }
 
+func (r *Runner) mr(action, state, status string, actor event.User, draft bool) *event.MergeRequest {
+	head := int64(pipelineID + 4)
+	m := &event.MergeRequest{Meta: meta(), Project: r.proj, User: actor, Action: action, ID: 990042, IID: mrIID,
+		Title: "signals: send the SSAID as the grant subject when it's known", URL: r.proj.WebURL + "/-/merge_requests/" + itoa(mrIID),
+		Description: "Sends the SSAID as the grant subject when the device reports one, and falls back to the install id.\n\nAlso bumps the injectors to 17.19.0.",
+		State:       state, Draft: draft, SourceBranch: "feat/ssaid-grant", TargetBranch: "develop", DetailedMergeStatus: status, HeadPipelineID: &head}
+	if actor == ada {
+		m.Author = ada
+	}
+	return m
+}
+
+// mrPipeline is the merge request pipeline of the mr scenario.
+func (r *Runner) mrPipeline(status string, jobs ...event.Job) *event.Pipeline {
+	p := r.pipeline(status, jobs...)
+	p.ID, p.IID, p.Ref, p.Source = pipelineID+4, 322, "refs/merge-requests/42/head", "merge_request_event"
+	p.MR = &event.MRRef{IID: mrIID, Title: "signals: send the SSAID as the grant subject when it's known", URL: r.proj.WebURL + "/-/merge_requests/" + itoa(mrIID)}
+	for i := range p.Jobs {
+		p.Jobs[i].PipelineID, p.Jobs[i].Ref = p.ID, p.Ref
+	}
+	return p
+}
+
 func (r *Runner) push(ref, before, after string, forced bool, commits ...event.Commit) *event.Push {
 	return &event.Push{Meta: meta(), Project: r.proj, User: ada, Ref: "refs/heads/" + ref, Before: before, After: after,
 		Commits: commits, TotalCommitsCount: len(commits), Forced: forced}
@@ -167,6 +189,41 @@ var scenarios = []Scenario{
 				p.Jobs[i].PipelineID, p.Jobs[i].Ref = p.ID, "feat/tappable-fix"
 			}
 			return r.handle(ctx, p)
+		},
+	}},
+	{Name: "mr", About: "a merge request opened, its pipeline running then passing, then merged", Steps: []Step{
+		func(ctx context.Context, r *Runner) error {
+			if err := r.handle(ctx, r.mr(event.MRActionOpen, event.MRStateOpened, "ci_still_running", ada, false)); err != nil {
+				return err
+			}
+			return r.eng.DecorateMR(ctx, cards.Key{Kind: cards.KindMR, ProjectID: r.proj.ID, ObjectID: mrIID}, 0, cards.DiffStats{FilesChanged: 3, Added: 42, Removed: 18})
+		},
+		func(ctx context.Context, r *Runner) error {
+			return r.handle(ctx, r.mrPipeline(event.StatusRunning, r.job(41, "assemble", "build", event.StatusSuccess, 62), r.job(42, "unit", "test", event.StatusRunning, 0)))
+		},
+		func(ctx context.Context, r *Runner) error {
+			if err := r.handle(ctx, r.mrPipeline(event.StatusSuccess, r.job(41, "assemble", "build", event.StatusSuccess, 62), r.job(42, "unit", "test", event.StatusSuccess, 100))); err != nil {
+				return err
+			}
+			if err := r.eng.DecorateMR(ctx, cards.Key{Kind: cards.KindMR, ProjectID: r.proj.ID, ObjectID: mrIID}, 1, cards.DiffStats{FilesChanged: 3, Added: 42, Removed: 18}); err != nil {
+				return err
+			}
+			return r.handle(ctx, r.mr(event.MRActionUpdate, event.MRStateOpened, event.MergeStatusMergeable, ada, false))
+		},
+		func(ctx context.Context, r *Runner) error {
+			return r.handle(ctx, r.mr(event.MRActionMerge, event.MRStateMerged, event.MergeStatusMergeable, linus, false))
+		},
+	}},
+	{Name: "mr-draft", About: "a draft merge request with conflicts, then closed", Steps: []Step{
+		func(ctx context.Context, r *Runner) error {
+			m := r.mr(event.MRActionOpen, event.MRStateOpened, event.MergeStatusConflict, ada, true)
+			m.IID, m.ID, m.HeadPipelineID, m.Title, m.URL = 43, 990043, nil, "prod update 0.431.0", r.proj.WebURL+"/-/merge_requests/43"
+			return r.handle(ctx, m)
+		},
+		func(ctx context.Context, r *Runner) error {
+			m := r.mr(event.MRActionClose, event.MRStateClosed, event.MergeStatusConflict, linus, true)
+			m.IID, m.ID, m.HeadPipelineID, m.Title, m.URL = 43, 990043, nil, "prod update 0.431.0", r.proj.WebURL+"/-/merge_requests/43"
+			return r.handle(ctx, m)
 		},
 	}},
 	{Name: "branch", About: "a branch created, then deleted", Steps: []Step{

@@ -8,8 +8,8 @@ import (
 	"github.com/esauvisky/gitgram/internal/gitlab/api"
 )
 
-// hookSpec is the hook the bot needs: push, job and pipeline events, every
-// other event off.
+// hookSpec is the hook the bot needs: push, job, pipeline and merge
+// request events, every other event off.
 func hookSpec(opts Options) api.HookSpec {
 	return api.HookSpec{
 		URL:                   opts.WebhookURL,
@@ -18,6 +18,7 @@ func hookSpec(opts Options) api.HookSpec {
 		PushEvents:            true,
 		JobEvents:             true,
 		PipelineEvents:        true,
+		MergeRequestsEvents:   true,
 	}
 }
 

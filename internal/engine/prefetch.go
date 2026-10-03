@@ -15,9 +15,8 @@ import (
 // slow GitLab API never pushes the webhook response past GitLab's 10 s.
 const prefetchTimeout = 5 * time.Second
 
-// enrichment carries REST data fetched before the transaction for push,
-// pipeline and job events. Zero when the API is unavailable or a call
-// failed.
+// enrichment carries REST data fetched before the transaction. Zero when
+// the API is unavailable or a call failed.
 type enrichment struct {
 	// tails holds final log tails for hard-failed jobs named by a pipeline
 	// or job event, fetched here because a pipeline that fails in the same
@@ -26,15 +25,19 @@ type enrichment struct {
 	// artifacts lists the archives a terminal pipeline's jobs produced;
 	// nil when not fetched.
 	artifacts []cards.Artifact
-	// diff holds a push's diff stats from the compare call; nil when not
-	// fetched.
+	// diff holds a push's diff stats from the compare call, or an MR's from
+	// the diffs call; nil when not fetched.
 	diff *cards.DiffStats
+	// unresolved is an MR's unresolved thread count; threads is true when
+	// it was fetched.
+	unresolved int
+	threads    bool
 }
 
-// prefetch performs the read-only enrichment the plan allows before BEGIN:
-// force-push detection for pushes (setting Push.Forced in place) and
-// approvals plus unresolved thread count for merge requests. Failures are
-// logged and degrade to no enrichment.
+// prefetch performs the read-only enrichment before the transaction:
+// force-push detection and diff stats for pushes (setting Push.Forced in
+// place), failure logs and artifacts for pipelines, diff stats and the
+// unresolved thread count for merge requests. Failures are logged and degrade to no enrichment.
 func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 	if e.api == nil {
 		return enrichment{}
@@ -61,8 +64,46 @@ func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 		return en
 	case *event.Job:
 		return e.enrichFailedTails(ctx, v.Project, v.PipelineID, []event.Job{*v})
+	case *event.MergeRequest:
+		ctx, cancel := context.WithTimeout(ctx, prefetchTimeout)
+		defer cancel()
+		en := e.enrichThreads(ctx, v.Project, v.IID)
+		if diffs, err := e.api.MRDiffs(ctx, v.Project.ID, v.IID); err != nil {
+			e.logEnrich("diffs", v.Project.Path, err)
+		} else {
+			en.diff = diffStats(diffs)
+		}
+		return en
 	}
 	return enrichment{}
+}
+
+// enrichThreads fetches an MR's unresolved thread count.
+func (e *Engine) enrichThreads(ctx context.Context, project event.Project, iid int64) enrichment {
+	n, err := e.api.MRDiscussions(ctx, project.ID, iid)
+	if err != nil {
+		e.logEnrich("discussions", project.Path, err)
+		return enrichment{}
+	}
+	return enrichment{unresolved: n, threads: true}
+}
+
+// diffStats derives stats from forward diffs (an MR's changes).
+func diffStats(diffs []api.Diff) *cards.DiffStats {
+	d := &cards.DiffStats{FilesChanged: len(diffs)}
+	for i, f := range diffs {
+		a, r := f.LineCounts()
+		d.Added += a
+		d.Removed += r
+		if i < cards.MaxDiffFiles {
+			df := cards.DiffFile{Path: f.NewPath, New: f.NewFile, Deleted: f.DeletedFile, Added: a, Removed: r}
+			if f.RenamedFile {
+				df.RenamedFrom = f.OldPath
+			}
+			d.Files = append(d.Files, df)
+		}
+	}
+	return d
 }
 
 // enrichFailedTails fetches the final log tail of every hard-failed job in

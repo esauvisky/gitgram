@@ -15,6 +15,8 @@ type Writer interface {
 	RetryPipeline(ctx context.Context, projectID, id int64) (*Pipeline, error)
 	// PlayJob is POST /projects/:id/jobs/:job_id/play.
 	PlayJob(ctx context.Context, projectID, jobID int64) (*Job, error)
+	// MergeMR is PUT /projects/:id/merge_requests/:iid/merge.
+	MergeMR(ctx context.Context, projectID, iid int64) error
 }
 
 var _ Writer = (*Client)(nil)

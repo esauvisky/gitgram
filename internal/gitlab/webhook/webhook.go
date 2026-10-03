@@ -4,8 +4,8 @@
 //
 // Routing is done on the body's object_kind (with event_type as a hint),
 // falling back to the X-Gitlab-Event header only when object_kind is absent.
-// Kinds the bot does not handle (tags, merge requests, comments, issues,
-// releases, deployments, wiki pages, emoji, access tokens, feature flags,
+// Kinds the bot does not handle (tags, comments, issues, releases,
+// deployments, wiki pages, emoji, access tokens, feature flags,
 // members, subgroups, projects, vulnerabilities, milestones, anything
 // unknown) yield ErrIgnored so the HTTP layer can answer 200 without doing
 // any work.
@@ -26,17 +26,19 @@ var ErrIgnored = errors.New("webhook: event ignored")
 
 // object_kind values GitLab sends for the hooks this bot handles.
 const (
-	kindPush     = "push"
-	kindPipeline = "pipeline"
-	kindBuild    = "build"
+	kindPush         = "push"
+	kindPipeline     = "pipeline"
+	kindBuild        = "build"
+	kindMergeRequest = "merge_request"
 )
 
 // headerKinds maps X-Gitlab-Event header values to object_kind for payloads
 // that lack object_kind.
 var headerKinds = map[string]string{
-	"Push Hook":     kindPush,
-	"Pipeline Hook": kindPipeline,
-	"Job Hook":      kindBuild,
+	"Push Hook":          kindPush,
+	"Pipeline Hook":      kindPipeline,
+	"Job Hook":           kindBuild,
+	"Merge Request Hook": kindMergeRequest,
 }
 
 // Parse decodes one webhook body into its normalized event. eventHeader is
@@ -64,6 +66,8 @@ func Parse(eventHeader string, body []byte, received time.Time) (event.Event, er
 		return parsePipeline(body, meta)
 	case kindBuild:
 		return parseJob(body, meta)
+	case kindMergeRequest:
+		return parseMergeRequest(body, meta)
 	case "":
 		return nil, fmt.Errorf("%w: no object_kind (header %q)", ErrIgnored, eventHeader)
 	}

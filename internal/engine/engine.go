@@ -91,6 +91,8 @@ func (e *Engine) apply(ctx context.Context, tx *store.Tx, ev event.Event, en enr
 			return e.applyBranchDeleted(ctx, tx, v)
 		}
 		return e.applyPush(ctx, tx, v, en)
+	case *event.MergeRequest:
+		return e.applyMR(ctx, tx, v, en)
 	}
 	e.log.Warn("unhandled event type", "kind", ev.EventKind())
 	return nil

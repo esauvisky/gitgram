@@ -50,6 +50,10 @@ func ReducePipeline(s *PipelineState, ev *event.Pipeline) (changed bool) {
 	if ev.Commit.SHA != "" {
 		s.Commit = ev.Commit
 	}
+	if ev.MR != nil {
+		mr := *ev.MR
+		s.MR = &mr
+	}
 	if ev.Parent != nil {
 		p := *ev.Parent
 		s.Parent = &p

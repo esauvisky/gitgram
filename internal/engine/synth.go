@@ -29,6 +29,7 @@ func synthPipeline(st *cards.PipelineState, p *api.Pipeline, jobs []api.Job, now
 		FinishedAt: p.FinishedAt,
 		Duration:   p.Duration,
 		Commit:     st.Commit,
+		MR:         st.MR,
 		Parent:     st.Parent,
 	}
 	if ev.Commit.SHA == "" && len(jobs) > 0 && jobs[0].Commit != nil {

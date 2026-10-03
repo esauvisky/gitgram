@@ -38,6 +38,8 @@ type Pipeline struct {
 	QueuedDuration *int
 
 	Commit Commit
+	// MR is set for merge request pipelines (source merge_request_event).
+	MR *MRRef
 	// Parent is set for child pipelines (source_pipeline).
 	Parent *PipelineRef
 	// Jobs is builds[] normalized. Each entry's Meta, Project, User,

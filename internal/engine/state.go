@@ -13,8 +13,9 @@ import (
 
 // Object link relations stored in object_links.
 const (
-	relChild        = "child"    // parent pipeline → child pipeline
-	relPushPipeline = "pipeline" // push → pipeline for its (branch, sha)
+	relChild        = "child"         // parent pipeline → child pipeline
+	relHeadPipeline = "head_pipeline" // mr → pipeline it shows
+	relPushPipeline = "pipeline"      // push → pipeline for its (branch, sha)
 )
 
 func skey(k cards.Key) store.Key {

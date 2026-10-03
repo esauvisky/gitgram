@@ -21,7 +21,8 @@ var (
 )
 
 // Can implements actions.Capabilities: with a writer, pipelines can be
-// stopped (after a confirmation) and retried, and manual jobs run. Anyone in the group may
+// stopped (after a confirmation) and retried, manual jobs run, and merge
+// requests merged (after a confirmation). Anyone in the group may
 // press.
 func (e *Engine) Can(k actions.Kind, a actions.Action) bool {
 	if e.writer == nil {
@@ -29,6 +30,9 @@ func (e *Engine) Can(k actions.Kind, a actions.Action) bool {
 	}
 	if k == actions.KindJob {
 		return a == actions.ActionPlay
+	}
+	if k == actions.KindMergeRequest {
+		return a == actions.ActionMerge || a == actions.ActionMergeYes || a == actions.ActionMergeNo
 	}
 	if k != actions.KindPipeline {
 		return false
@@ -50,6 +54,9 @@ func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Res
 	}
 	if !e.Can(req.Kind, req.Action) {
 		return actions.Result{Toast: "This button is no longer valid.", Alert: true}, nil
+	}
+	if req.Kind == actions.KindMergeRequest {
+		return e.dispatchMerge(ctx, req)
 	}
 	key := cards.Key{Kind: cards.KindPipeline, ProjectID: req.ProjectID, ObjectID: req.ObjectID}
 	id := strconv.FormatInt(req.ObjectID, 10)
@@ -125,4 +132,64 @@ func shortError(err error) string {
 		s = s[:150] + "…"
 	}
 	return s
+}
+
+// dispatchMerge handles the Merge button: the first press and "keep open"
+// only flip the card's confirmation; "yes, merge it" calls GitLab, and the
+// resulting Merge Request Hook updates the card.
+func (e *Engine) dispatchMerge(ctx context.Context, req actions.Request) (actions.Result, error) {
+	key := cards.Key{Kind: cards.KindMR, ProjectID: req.ProjectID, ObjectID: req.ObjectID}
+	iid := "!" + strconv.FormatInt(req.ObjectID, 10)
+	switch req.Action {
+	case actions.ActionMerge:
+		if err := e.setConfirmMerge(ctx, key, true); err != nil {
+			return actions.Result{}, err
+		}
+		return actions.Result{Toast: "Merge " + iid + "? Confirm on the card."}, nil
+	case actions.ActionMergeNo:
+		if err := e.setConfirmMerge(ctx, key, false); err != nil {
+			return actions.Result{}, err
+		}
+		return actions.Result{Toast: iid + " stays open."}, nil
+	}
+	if err := e.setConfirmMerge(ctx, key, false); err != nil {
+		return actions.Result{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
+	defer cancel()
+	if err := e.writer.MergeMR(ctx, req.ProjectID, req.ObjectID); err != nil {
+		e.log.Warn("action failed", "action", req.Action, "project", req.ProjectID, "mr", req.ObjectID, "user", req.TelegramUserID, "err", err)
+		var apiErr *api.Error
+		if errors.As(err, &apiErr) && apiErr.Status >= 400 && apiErr.Status < 500 || errors.Is(err, api.ErrForbidden) {
+			return actions.Result{Toast: "GitLab refused: " + shortError(err), Alert: true}, nil
+		}
+		return actions.Result{Toast: "GitLab call failed: " + shortError(err), Alert: true}, nil
+	}
+	e.log.Info("action done", "action", req.Action, "project", req.ProjectID, "mr", req.ObjectID, "user", req.TelegramUserID)
+	return actions.Result{Toast: "Merging " + iid}, nil
+}
+
+// setConfirmMerge records whether the MR card is asking to confirm a merge
+// and re-renders it.
+func (e *Engine) setConfirmMerge(ctx context.Context, key cards.Key, on bool) error {
+	err := e.st.WithTx(ctx, func(tx *store.Tx) error {
+		st, row, err := load[cards.MRState](ctx, tx, key, e.log)
+		if err != nil || row == nil || st.ConfirmMerge == on {
+			return err
+		}
+		st.ConfirmMerge = on
+		if err := put(ctx, tx, key, st, st.Final, row.LastEventAt); err != nil {
+			return err
+		}
+		card, err := tx.GetCard(ctx, skey(key))
+		if err != nil {
+			return err
+		}
+		return e.enqueueCard(ctx, tx, key, card, st.Final)
+	})
+	if err != nil {
+		return err
+	}
+	e.notify()
+	return nil
 }

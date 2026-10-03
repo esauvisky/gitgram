@@ -31,6 +31,7 @@ type Kind string
 const (
 	KindPipeline Kind = "pipeline"
 	KindPush     Kind = "push"
+	KindMR       Kind = "mr"
 )
 
 // Key identifies one object_state row and therefore one card. ObjectID is

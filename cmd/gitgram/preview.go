@@ -121,3 +121,7 @@ func (previewWriter) RetryPipeline(context.Context, int64, int64) (*api.Pipeline
 func (previewWriter) PlayJob(context.Context, int64, int64) (*api.Job, error) {
 	return nil, errPreviewWriter
 }
+
+func (previewWriter) MergeMR(context.Context, int64, int64) error {
+	return errPreviewWriter
+}

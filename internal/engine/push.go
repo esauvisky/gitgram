@@ -171,13 +171,30 @@ func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.K
 	return push.Absorbs, false, e.enqueueCard(ctx, tx, pk, card, push.Final)
 }
 
-// publishPipeline pushes a changed pipeline state to whichever card shows
-// it: the push card that absorbs it, or its own card, which waits while
-// the pipeline's source is unknown and a push card might claim it.
+// publishPipeline pushes a changed pipeline state to every card that shows
+// it: the push card that absorbs it, the MR cards it belongs to, and its
+// own card unless a push or MR card absorbs it. The own card waits while
+// the source is unknown and a push or MR card might claim it; one that was
+// already posted keeps updating.
 func (e *Engine) publishPipeline(ctx context.Context, tx *store.Tx, key cards.Key, st *cards.PipelineState, received time.Time) error {
 	absorbed, hold, err := e.syncPipelinePush(ctx, tx, key, st, received)
-	if err != nil || absorbed || hold {
+	if err != nil || hold {
 		return err
+	}
+	// A merge request pipeline waits for the Pipeline Hook that names its
+	// MR before posting a card of its own (Job Hooks usually arrive first).
+	if !st.SeenPipelineEvent && isMRPipelineRef(st.Ref) {
+		return nil
+	}
+	byMR, err := e.syncPipelineMRs(ctx, tx, key, st)
+	if err != nil || absorbed {
+		return err
+	}
+	if byMR {
+		own, err := tx.GetCard(ctx, skey(key))
+		if err != nil || own == nil {
+			return err
+		}
 	}
 	return e.enqueuePipelineCard(ctx, tx, st)
 }
@@ -191,6 +208,35 @@ func (e *Engine) DecoratePush(ctx context.Context, key cards.Key, diff cards.Dif
 			return err
 		}
 		if !st.SetDiff(diff) {
+			return nil
+		}
+		if err := put(ctx, tx, key, st, st.Final, row.LastEventAt); err != nil {
+			return err
+		}
+		card, err := tx.GetCard(ctx, skey(key))
+		if err != nil {
+			return err
+		}
+		return e.enqueueCard(ctx, tx, key, card, st.Final)
+	})
+	if err != nil {
+		return err
+	}
+	e.notify()
+	return nil
+}
+
+// DecorateMR writes an MR's unresolved thread count and diff stats into its
+// stored state and queues its card, as the MR prefetch would. The preview
+// subcommand uses it.
+func (e *Engine) DecorateMR(ctx context.Context, key cards.Key, unresolved int, diff cards.DiffStats) error {
+	err := e.st.WithTx(ctx, func(tx *store.Tx) error {
+		st, row, err := load[cards.MRState](ctx, tx, key, e.log)
+		if err != nil || row == nil {
+			return err
+		}
+		threads, diffs := st.SetThreads(unresolved), st.SetDiff(diff)
+		if !threads && !diffs {
 			return nil
 		}
 		if err := put(ctx, tx, key, st, st.Final, row.LastEventAt); err != nil {

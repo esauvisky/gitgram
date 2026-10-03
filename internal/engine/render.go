@@ -23,6 +23,12 @@ func (e *Engine) Render(kind string, stateJSON []byte, _ *int64) (telegram.Messa
 			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
 		}
 		msg = render.Pipeline(&s, e.options())
+	case cards.KindMR:
+		var s cards.MRState
+		if err := json.Unmarshal(stateJSON, &s); err != nil {
+			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
+		}
+		msg = render.MergeRequest(&s, e.options())
 	case cards.KindPush:
 		var s cards.PushState
 		if err := json.Unmarshal(stateJSON, &s); err != nil {
