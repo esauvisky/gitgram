@@ -226,6 +226,19 @@ var scenarios = []Scenario{
 			return r.handle(ctx, m)
 		},
 	}},
+	{Name: "pipeline-then-push", About: "a fast pipeline whose events land before its Push Hook, absorbed once the push arrives", Steps: []Step{
+		func(ctx context.Context, r *Runner) error {
+			p := r.pipeline(event.StatusSuccess, r.job(51, "deploy", "deploy", event.StatusSuccess, 31))
+			p.ID, p.IID, p.Ref, p.Stages, p.CreatedAt = pipelineID+5, 898, "master", []string{"deploy"}, time.Now().Add(-35*time.Second)
+			for i := range p.Jobs {
+				p.Jobs[i].PipelineID, p.Jobs[i].Ref = p.ID, "master"
+			}
+			return r.handle(ctx, p)
+		},
+		func(ctx context.Context, r *Runner) error {
+			return r.handle(ctx, r.push("master", "1111111111111111111111111111111111111111", sha, false, r.commit("fix: zorua spawn table")))
+		},
+	}},
 	{Name: "branch", About: "a branch created, then deleted", Steps: []Step{
 		func(ctx context.Context, r *Runner) error {
 			return r.handle(ctx, r.push("feat/cleanup", event.ZeroSHA, sha, false, r.commit("chore: remove dead injector paths")))

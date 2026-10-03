@@ -26,6 +26,17 @@ func (e *Engine) applyPush(ctx context.Context, tx *store.Tx, ev *event.Push, en
 	if en.diff != nil && st.SetDiff(*en.diff) {
 		changed = true
 	}
+	// A pipeline that arrived first and is still waiting without a card of
+	// its own joins this card now.
+	if st.Pipeline != nil && !st.Absorbs && !st.Superseded {
+		own, err := tx.GetCard(ctx, skey(cards.Key{Kind: cards.KindPipeline, ProjectID: ev.Project.ID, ObjectID: st.Pipeline.ID}))
+		if err != nil {
+			return err
+		}
+		if own == nil {
+			st.Absorbs, changed = true, true
+		}
+	}
 	if err := put(ctx, tx, key, st, st.Final, latest(row, ev.Received)); err != nil {
 		return err
 	}
@@ -80,6 +91,10 @@ func (e *Engine) supersedePush(ctx context.Context, tx *store.Tx, prevKey cards.
 	}
 	return e.enqueueCard(ctx, tx, prevKey, card, true)
 }
+
+// pushWait is how long a pipeline triggered by a push waits, without a card
+// of its own, for the Push Hook to arrive and absorb it.
+const pushWait = 2 * time.Minute
 
 // syncPipelinePush keeps the push card of a pipeline's (branch, sha) in
 // step with it. Only a pipeline the Pipeline Hook confirms as triggered by
@@ -145,15 +160,20 @@ func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.K
 	if push.Superseded && !push.Absorbs {
 		return false, false, nil
 	}
+	ownCard, err := tx.GetCard(ctx, skey(key))
+	if err != nil {
+		return false, false, err
+	}
 	if !mine || !push.Absorbs {
-		ownCard, err := tx.GetCard(ctx, skey(key))
-		if err != nil {
-			return false, false, err
-		}
 		push.Absorbs = push.SeenPush && ownCard == nil
 	}
+	// The Push Hook usually lands seconds after the pipeline's (its diff
+	// fetch is slow): a pipeline with no card yet waits for it, up to
+	// pushWait after the pipeline was created, so the push card can absorb
+	// it.
+	waiting := !push.SeenPush && ownCard == nil && st.CreatedAt != nil && received.Sub(*st.CreatedAt) < pushWait
 	if !push.SetPipeline(st) {
-		return push.Absorbs, false, nil
+		return push.Absorbs, waiting, nil
 	}
 	if err := put(ctx, tx, pk, push, push.Final, latest(row, received)); err != nil {
 		return false, false, err
@@ -162,7 +182,7 @@ func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.K
 		return false, false, err
 	}
 	if !push.SeenPush {
-		return false, false, nil
+		return false, waiting, nil
 	}
 	card, err := tx.GetCard(ctx, skey(pk))
 	if err != nil {
