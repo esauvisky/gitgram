@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" width="160" alt="Gitgram logo: a git graph merging into a paper plane">
+  <img src="assets/logo.png" width="160" alt="Gitgram logo: a faceted fox inside a chat bubble">
 </p>
 
 <h1 align="center">Gitgram</h1>
