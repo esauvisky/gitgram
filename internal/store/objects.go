@@ -66,6 +66,31 @@ func (q queries) ListNonFinal(ctx context.Context, kind string, olderThan time.T
 	return out, nil
 }
 
+// ListProject returns every object of kind in one project, newest event
+// first.
+func (q queries) ListProject(ctx context.Context, kind string, projectID int64) ([]ObjectRow, error) {
+	rows, err := q.db.QueryContext(ctx,
+		`SELECT `+objectColumns+` FROM object_state
+		 WHERE kind = ? AND project_id = ? ORDER BY last_event_at DESC`,
+		kind, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("list %q in project %d: %w", kind, projectID, err)
+	}
+	defer rows.Close()
+	var out []ObjectRow
+	for rows.Next() {
+		o, err := scanObject(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list %q in project %d: %w", kind, projectID, err)
+		}
+		out = append(out, *o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list %q in project %d: %w", kind, projectID, err)
+	}
+	return out, nil
+}
+
 // ExpireNonFinal marks non-final objects of kind whose last event precedes
 // olderThan as final, so Prune can retire them later. It returns the
 // number of rows changed.

@@ -41,6 +41,9 @@ type MRState struct {
 
 	MergedBy *event.User
 	ClosedBy *event.User
+	// SourceBranchDeleted is set when the source branch was deleted (GitLab
+	// usually does it right after the merge).
+	SourceBranchDeleted bool
 	// ConfirmMerge is set while someone pressed Merge and the card is
 	// asking to confirm; cleared by the answer.
 	ConfirmMerge bool

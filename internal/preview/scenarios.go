@@ -191,7 +191,7 @@ var scenarios = []Scenario{
 			return r.handle(ctx, p)
 		},
 	}},
-	{Name: "mr", About: "a merge request opened, its pipeline running then passing, then merged", Steps: []Step{
+	{Name: "mr", About: "a merge request opened, its pipeline running then passing, then merged and its branch deleted", Steps: []Step{
 		func(ctx context.Context, r *Runner) error {
 			if err := r.handle(ctx, r.mr(event.MRActionOpen, event.MRStateOpened, "ci_still_running", ada, false)); err != nil {
 				return err
@@ -212,6 +212,9 @@ var scenarios = []Scenario{
 		},
 		func(ctx context.Context, r *Runner) error {
 			return r.handle(ctx, r.mr(event.MRActionMerge, event.MRStateMerged, event.MergeStatusMergeable, linus, false))
+		},
+		func(ctx context.Context, r *Runner) error {
+			return r.handle(ctx, r.push("feat/ssaid-grant", sha, event.ZeroSHA, false))
 		},
 	}},
 	{Name: "mr-draft", About: "a draft merge request with conflicts, then closed", Steps: []Step{

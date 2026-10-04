@@ -61,11 +61,49 @@ func (e *Engine) applyBranchDeleted(ctx context.Context, tx *store.Tx, ev *event
 	if err := e.supersedePush(ctx, tx, cards.PushKey(ev.Project.ID, ev.Branch(), ev.Before), ""); err != nil {
 		return err
 	}
+	if marked, err := e.markSourceBranchDeleted(ctx, tx, ev); err != nil || marked {
+		return err
+	}
 	payload, err := json.Marshal(render.BranchDeleted(ev, e.options()))
 	if err != nil {
 		return fmt.Errorf("encode branch deletion: %w", err)
 	}
 	return tx.EnqueueSend(ctx, nil, payload)
+}
+
+// markSourceBranchDeleted notes a branch deletion on the card of the merge
+// request whose source branch it was (the newest one that is open, or merged
+// within the hour), and reports whether there was one. GitLab's merge event can land after
+// the deletion, so the MR need not show as merged yet.
+func (e *Engine) markSourceBranchDeleted(ctx context.Context, tx *store.Tx, ev *event.Push) (bool, error) {
+	rows, err := tx.ListProject(ctx, string(cards.KindMR), ev.Project.ID)
+	if err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		var st cards.MRState
+		if err := unmarshalState(row, &st); err != nil || st.SourceBranch != ev.Branch() || st.State == event.MRStateClosed {
+			continue
+		}
+		// A branch name can come back long after an old MR merged it.
+		if st.State == event.MRStateMerged && ev.Received.Sub(row.LastEventAt) > time.Hour {
+			continue
+		}
+		if st.SourceBranchDeleted {
+			return true, nil
+		}
+		st.SourceBranchDeleted = true
+		key := st.Key()
+		if err := put(ctx, tx, key, &st, st.Final, row.LastEventAt); err != nil {
+			return false, err
+		}
+		card, err := tx.GetCard(ctx, skey(key))
+		if err != nil {
+			return false, err
+		}
+		return true, e.enqueueCard(ctx, tx, key, card, st.Final)
+	}
+	return false, nil
 }
 
 // supersedePush freezes the previous push card when it exists and is not

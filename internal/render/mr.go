@@ -16,7 +16,8 @@ import (
 // in a quote, a small line for unresolved threads, the head pipeline's stage
 // lines after a blank line, and last, in bold after a blank line, where it
 // stands: `Merged into develop by @linus`, `Closed by @ada`, or while open
-// `Draft` and `⚠️ Conflicts with develop`. The buttons are Merge (with a confirmation) while
+// `Draft` and `⚠️ Conflicts with develop`, followed by a small line once
+// the source branch was deleted. The buttons are Merge (with a confirmation) while
 // GitLab reports the MR as mergeable, and the pipeline's Stop, Retry and
 // Run.
 func MergeRequest(s *cards.MRState, o Options) Message {
@@ -79,9 +80,14 @@ func MergeRequest(s *cards.MRState, o Options) Message {
 			standing = append(standing, "⚠️ Conflicts with "+htmlfmt.Code(s.TargetBranch))
 		}
 	}
-	if len(standing) > 0 {
+	if len(standing) > 0 || s.SourceBranchDeleted {
 		b.Line("")
+	}
+	if len(standing) > 0 {
 		b.Line("<b>" + strings.Join(standing, " · ") + "</b>")
+	}
+	if s.SourceBranchDeleted {
+		small(&b, "The branch "+htmlfmt.Code(s.SourceBranch)+" was deleted.")
 	}
 	taglineFooter(&b, "mr:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.IID, 10))
 	return Message{HTML: b.Truncate(o.limit(), s.URL), Keyboard: kb}
