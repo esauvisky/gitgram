@@ -35,6 +35,7 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 1. `/newbot` at [@BotFather](https://t.me/BotFather), keep the token.
 2. Add the bot to your group and make it an admin.
 3. Get the chat id (`-100…`): forward a group message to [@getidsbot](https://t.me/getidsbot), or open the group in [web.telegram.org](https://web.telegram.org/a/) and read the URL fragment.
+4. Optional: to have cards show no sender name, set the bot's name to an invisible one. In @BotFather send `/setname`, pick the bot, and paste the three characters U+034F U+2005 U+034F (combining grapheme joiner, four-per-em space, combining grapheme joiner). They are between these brackets: [͏ ͏]. Telegram rejects an empty or plain-space name; this one passes and renders blank. To type it in a shell: `printf '\u034f\u2005\u034f' | wl-copy` (or `xclip -selection clipboard`).
 
 ### 2. GitLab
 
