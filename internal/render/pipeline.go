@@ -51,7 +51,7 @@ func Pipeline(s *cards.PipelineState, o Options) Message {
 	}
 	headline(&b, lead, "in", s.Project, ref)
 	if s.Commit.SHA != "" || s.Commit.Title != "" {
-		b.Quote(commitLine(s.Commit, commitAuthor(s.Commit, s.Triggerer)))
+		b.Quote(commitLine(s.Commit, commitAuthor(s.Commit, s.Triggerer)), false)
 	}
 	pipelineBody(s, v, &b)
 	taglineFooter(&b, "pipeline:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.ID, 10))

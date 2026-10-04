@@ -42,7 +42,7 @@ func MergeRequest(s *cards.MRState, o Options) Message {
 		desc += "<i>" + d + "</i>"
 	}
 	if desc != "" {
-		b.Quote(desc)
+		b.Quote(desc, false)
 	}
 	if s.State == event.MRStateOpened && s.Threads && s.UnresolvedThreads > 0 {
 		small(&b, plural(s.UnresolvedThreads, "unresolved thread"))

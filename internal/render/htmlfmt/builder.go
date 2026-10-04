@@ -19,8 +19,9 @@ type line struct {
 	visible int
 	// inner is set for blockquotes, which Truncate shortens before dropping
 	// whole lines.
-	inner string
-	quote bool
+	inner      string
+	quote      bool
+	expandable bool
 }
 
 // Line appends one line of formatted HTML. An empty string is a blank line.
@@ -29,10 +30,11 @@ func (b *Builder) Line(html string) {
 }
 
 // Quote appends a blockquote holding inner (already-formatted HTML, may span
-// several lines). Quotes are the first thing Truncate shortens.
-func (b *Builder) Quote(inner string) {
-	html := Blockquote(inner)
-	b.lines = append(b.lines, line{html: html, visible: VisibleLen(html), inner: inner, quote: true})
+// several lines), collapsed when expandable. Quotes are the first thing
+// Truncate shortens.
+func (b *Builder) Quote(inner string, expandable bool) {
+	html := Blockquote(inner, expandable)
+	b.lines = append(b.lines, line{html: html, visible: VisibleLen(html), inner: inner, quote: true, expandable: expandable})
 }
 
 // Len is the visible length of the message including line breaks.
@@ -91,8 +93,8 @@ func (b *Builder) Truncate(limit int, moreURL string) string {
 		}
 		inner := strings.TrimRight(prefix, " \n")
 		inner += closeOpen(inner) + "…"
-		html := Blockquote(inner)
-		t.lines[i] = line{html: html, visible: VisibleLen(html), inner: inner, quote: true}
+		html := Blockquote(inner, l.expandable)
+		t.lines[i] = line{html: html, visible: VisibleLen(html), inner: inner, quote: true, expandable: l.expandable}
 	}
 	for len(t.lines) > 0 && t.Len() > budget {
 		t.lines = t.lines[:len(t.lines)-1]

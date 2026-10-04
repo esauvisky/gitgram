@@ -83,7 +83,6 @@ Everything comes from `GITGRAM_*` environment variables; under Docker Compose th
 | `GITGRAM_GITLAB_TOKEN` | | `read_api` token |
 | `GITGRAM_GITLAB_HOOKS_TOKEN` | | `api` token for sync-hooks and the buttons |
 | `GITGRAM_LOG_LINES` | `10` | log lines shown for a failed job; `0` disables them |
-| `GITGRAM_MAX_COMMITS` | `10` | commits listed per push |
 | `GITGRAM_DB` | `/data/gitgram.db` | SQLite file |
 | `GITGRAM_LOG_LEVEL` / `GITGRAM_LOG_FORMAT` | `info` / `text` | slog level; `text` or `json` |
 

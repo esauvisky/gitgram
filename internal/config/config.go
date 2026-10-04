@@ -21,8 +21,6 @@ type Config struct {
 	// LogLines is how many lines of a failed job's log a card shows; 0
 	// disables failure logs.
 	LogLines int
-	// MaxCommits caps the commits listed on a push card.
-	MaxCommits int
 }
 
 // Telegram configures the bot transport and the destination chats.
@@ -116,10 +114,9 @@ func Load(overrides ...func(*Config)) (*Config, error) {
 			HooksToken:    env("GITGRAM_GITLAB_HOOKS_TOKEN", ""),
 			WebhookSecret: env("GITGRAM_WEBHOOK_SECRET", ""),
 		},
-		Storage:    Storage{Path: env("GITGRAM_DB", "/data/gitgram.db")},
-		Logging:    Logging{Level: env("GITGRAM_LOG_LEVEL", "info"), Format: env("GITGRAM_LOG_FORMAT", "text")},
-		LogLines:   number("GITGRAM_LOG_LINES", 10),
-		MaxCommits: number("GITGRAM_MAX_COMMITS", 10),
+		Storage:  Storage{Path: env("GITGRAM_DB", "/data/gitgram.db")},
+		Logging:  Logging{Level: env("GITGRAM_LOG_LEVEL", "info"), Format: env("GITGRAM_LOG_FORMAT", "text")},
+		LogLines: number("GITGRAM_LOG_LINES", 10),
 	}
 	seen := map[int64]bool{}
 	for _, part := range strings.Split(env("GITGRAM_CHAT_ID", ""), ",") {
@@ -181,9 +178,6 @@ func Load(overrides ...func(*Config)) (*Config, error) {
 	}
 	if c.LogLines < 0 || c.LogLines > 50 {
 		bad("GITGRAM_LOG_LINES: must be 0..50, got %d", c.LogLines)
-	}
-	if c.MaxCommits < 1 {
-		bad("GITGRAM_MAX_COMMITS: must be at least 1, got %d", c.MaxCommits)
 	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("config: %w", errors.Join(errs...))

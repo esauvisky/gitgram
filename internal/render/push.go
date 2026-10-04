@@ -15,9 +15,8 @@ import (
 // closed by the line counts in italics, then the pipeline for the pushed
 // head: in full (one line per stage with its time, the failed log, Stop
 // and Retry) when this card absorbs the pipeline the push triggered, as
-// one small line when the pipeline has a card of its own. maxCommits caps
-// the listed commits.
-func Push(s *cards.PushState, maxCommits int, o Options) Message {
+// one small line when the pipeline has a card of its own.
+func Push(s *cards.PushState, o Options) Message {
 	var b htmlfmt.Builder
 	verb, prep := "pushed", "to"
 	switch {
@@ -35,11 +34,11 @@ func Push(s *cards.PushState, maxCommits int, o Options) Message {
 		small(&b, "⚠️ Force push: the branch history was rewritten")
 	}
 	if len(s.Commits) > 0 {
-		rows := commitList(s.Commits, s.TotalCommits, maxCommits, s.Pusher, pushMoreURL(s))
+		rows := commitList(s.Commits, s.TotalCommits, s.Pusher, pushMoreURL(s))
 		if d := diffSummary(s.Diff); d != "" {
-			rows += "\n\n<i>" + d + "</i>"
+			rows = append(rows, "", "<i>"+d+"</i>")
 		}
-		b.Quote(rows)
+		b.Quote(strings.Join(rows, "\n"), len(rows) >= collapseCommitLines)
 	}
 	var kb [][]Button
 	switch {
@@ -96,22 +95,19 @@ func BranchDeleted(p *event.Push, o Options) Message {
 	return Message{HTML: b.String()}
 }
 
-// commitList renders up to max commits as `author: title` lines (see
-// commitLine), followed by "+N more" when total exceeds what is shown,
-// linked to moreURL when set.
-func commitList(commits []event.Commit, total, max int, pusher event.User, moreURL string) string {
-	if max <= 0 {
-		max = len(commits)
-	}
-	shown := commits
-	if len(shown) > max {
-		shown = shown[:max]
-	}
-	lines := make([]string, 0, len(shown)+1)
-	for _, c := range shown {
+// collapseCommitLines is the size from which the commits quote starts
+// collapsed: shorter quotes (commit rows, the blank line and the line
+// counts) show in full.
+const collapseCommitLines = 8
+
+// commitList is one `author: title` row per commit the payload carries,
+// then "+N more" (linked to moreURL when set) when the push held more.
+func commitList(commits []event.Commit, total int, pusher event.User, moreURL string) []string {
+	lines := make([]string, 0, len(commits)+1)
+	for _, c := range commits {
 		lines = append(lines, commitLine(c, commitAuthor(c, pusher)))
 	}
-	if rest := total - len(shown); rest > 0 {
+	if rest := total - len(commits); rest > 0 {
 		more := "+" + strconv.Itoa(rest) + " more"
 		if moreURL != "" {
 			lines = append(lines, htmlfmt.A(more, moreURL))
@@ -119,7 +115,7 @@ func commitList(commits []event.Commit, total, max int, pusher event.User, moreU
 			lines = append(lines, more)
 		}
 	}
-	return strings.Join(lines, "\n")
+	return lines
 }
 
 // commitLine is a commit as `author: title`, the author bold and italic,

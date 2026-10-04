@@ -34,7 +34,7 @@ func (e *Engine) Render(kind string, stateJSON []byte, _ *int64) (telegram.Messa
 		if err := json.Unmarshal(stateJSON, &s); err != nil {
 			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
 		}
-		msg = render.Push(&s, e.cfg.MaxCommits, e.options())
+		msg = render.Push(&s, e.options())
 	default:
 		return telegram.Message{}, fmt.Errorf("render: unknown card kind %q", kind)
 	}
