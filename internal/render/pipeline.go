@@ -30,7 +30,7 @@ func viewPipeline(s *cards.PipelineState) *pipelineView {
 	return &pipelineView{status: s.EffectiveStatus(), jobs: s.SortedJobs(), failed: failed, warned: len(all) > len(failed)}
 }
 
-// Pipeline renders a pipeline card: the title (`@emi ran pipeline #84 in
+// Pipeline renders a pipeline card: the title (`@emi ran a pipeline in
 // demo (main)`, fixed once posted), the commit quoted like a push's commit
 // row, and one line per stage that carries the result (mark, state, time,
 // artifacts, the failed job's log under its stage). A pipeline that a push card
@@ -38,9 +38,10 @@ func viewPipeline(s *cards.PipelineState) *pipelineView {
 func Pipeline(s *cards.PipelineState, o Options) Message {
 	v := viewPipeline(s)
 	var b htmlfmt.Builder
-	lead := "Pipeline " + pipelineAnchor(s) + " ran"
+	pipeline := projectPage("pipeline", s.Project, "/-/pipelines")
+	lead := "A " + pipeline + " ran"
 	if !s.Triggerer.IsZero() {
-		lead = o.who(s.Triggerer) + " ran pipeline " + pipelineAnchor(s)
+		lead = o.who(s.Triggerer) + " ran a " + pipeline
 	}
 	ref := ""
 	if s.Ref != "" {
@@ -56,15 +57,6 @@ func Pipeline(s *cards.PipelineState, o Options) Message {
 	pipelineBody(s, v, &b)
 	taglineFooter(&b, "pipeline:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.ID, 10))
 	return Message{HTML: b.Truncate(o.limit(), s.URL), Keyboard: pipelineKeyboard(s, v, o)}
-}
-
-// pipelineAnchor is `#n`, linked to the pipeline.
-func pipelineAnchor(s *cards.PipelineState) string {
-	num := s.IID
-	if num == 0 {
-		num = s.ID
-	}
-	return anchorText("#", num, s.URL)
 }
 
 // pipelineBody writes, after a blank line, one line per stage in every

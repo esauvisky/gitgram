@@ -10,7 +10,7 @@ import (
 	"github.com/esauvisky/gitgram/internal/render/htmlfmt"
 )
 
-// MergeRequest renders a merge request card: the title (`@ada opened MR !42
+// MergeRequest renders a merge request card: the title (`@ada opened a MR
 // in demo (feat/x → develop)`, fixed once posted), the MR title in bold
 // and linked (struck through once closed), the description and line counts
 // in a quote, a small line for unresolved threads, the head pipeline's stage
@@ -22,7 +22,7 @@ import (
 // Run.
 func MergeRequest(s *cards.MRState, o Options) Message {
 	var b htmlfmt.Builder
-	headline(&b, o.who(s.Author)+" opened MR !"+strconv.FormatInt(s.IID, 10), "in", s.Project,
+	headline(&b, o.who(s.Author)+" opened a "+projectPage("MR", s.Project, "/-/merge_requests"), "in", s.Project,
 		branchRef(s.Project, s.SourceBranch)+" → "+branchRef(s.Project, s.TargetBranch))
 
 	title := htmlfmt.Esc(s.Title)

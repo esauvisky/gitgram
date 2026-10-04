@@ -110,6 +110,15 @@ func tagRef(p event.Project, tag string) string {
 	return `<a href="` + htmlfmt.Esc(p.WebURL+"/-/tags/"+tag) + `">` + chip + "</a>"
 }
 
+// projectPage is text linked to one of the project's pages (path under
+// its web URL), plain when the URL is unknown.
+func projectPage(text string, p event.Project, path string) string {
+	if p.WebURL == "" {
+		return htmlfmt.Esc(text)
+	}
+	return htmlfmt.A(text, p.WebURL+path)
+}
+
 // branchRef is a branch as a code chip linked to its tree.
 func branchRef(p event.Project, branch string) string {
 	chip := htmlfmt.Code(branch)
