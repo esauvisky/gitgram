@@ -89,7 +89,7 @@ func runPreviewWith(ctx context.Context, cfg *config.Config, client *telegram.Cl
 	var sender *telegram.Sender
 	// The stand-in writer only makes the cards draw their buttons; presses
 	// land on the live bot, never here.
-	eng := engine.New(cfg, st, nil, previewWriter{}, func() { sender.Notify() }, logger)
+	eng := engine.New(cfg, st, nil, previewWriter{}, nil, func() { sender.Notify() }, logger)
 	sender = telegram.NewSender(client, chats, outboxAdapter{st: st, primary: chats[0]}, eng, logger)
 	runCtx, cancelRun := context.WithCancel(context.Background())
 	senderDone := make(chan struct{})
@@ -97,7 +97,7 @@ func runPreviewWith(ctx context.Context, cfg *config.Config, client *telegram.Cl
 		defer close(senderDone)
 		sender.Run(runCtx)
 	}()
-	runErr := preview.Run(ctx, eng, st, preview.Options{Group: cfg.GitLab.Group, Scenarios: scenarios, Delay: delay, Log: logger})
+	runErr := preview.Run(ctx, eng, st, preview.Options{Group: cfg.GitLab.Group, Owners: cfg.GitHub.Owners, Scenarios: scenarios, Delay: delay, Log: logger})
 	cancelRun()
 	<-senderDone
 	return runErr

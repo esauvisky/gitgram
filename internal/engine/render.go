@@ -6,6 +6,7 @@ import (
 
 	"github.com/esauvisky/gitgram/internal/actions"
 	"github.com/esauvisky/gitgram/internal/cards"
+	"github.com/esauvisky/gitgram/internal/event"
 	"github.com/esauvisky/gitgram/internal/render"
 	"github.com/esauvisky/gitgram/internal/telegram"
 )
@@ -22,29 +23,33 @@ func (e *Engine) Render(kind string, stateJSON []byte, _ *int64) (telegram.Messa
 		if err := json.Unmarshal(stateJSON, &s); err != nil {
 			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
 		}
-		msg = render.Pipeline(&s, e.options())
+		msg = render.Pipeline(&s, e.options(s.Project))
 	case cards.KindMR:
 		var s cards.MRState
 		if err := json.Unmarshal(stateJSON, &s); err != nil {
 			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
 		}
-		msg = render.MergeRequest(&s, e.options())
+		msg = render.MergeRequest(&s, e.options(s.Project))
 	case cards.KindPush:
 		var s cards.PushState
 		if err := json.Unmarshal(stateJSON, &s); err != nil {
 			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
 		}
-		msg = render.Push(&s, e.options())
+		msg = render.Push(&s, e.options(s.Project))
 	default:
 		return telegram.Message{}, fmt.Errorf("render: unknown card kind %q", kind)
 	}
 	return toTelegram(msg), nil
 }
 
-// options builds the render options: the buttons the bot can offer.
-func (e *Engine) options() render.Options {
+// options builds the render options for a project: the buttons the bot
+// can offer on its host.
+func (e *Engine) options(p event.Project) render.Options {
 	var caps actions.Capabilities = actions.None{}
-	if e.writer != nil {
+	switch {
+	case p.IsGitHub():
+		caps = githubCaps{e}
+	case e.writer != nil:
 		caps = e
 	}
 	return render.Options{

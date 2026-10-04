@@ -27,6 +27,9 @@ type Options struct {
 	// Group is the configured top-level group; the mock project lives under
 	// it so the engine accepts its events.
 	Group string
+	// Owners are the configured GitHub owners; the mock repository lives
+	// under the first when no GitLab group is configured.
+	Owners []string
 	// Scenarios names what to send; empty or "all" runs everything in order.
 	Scenarios []string
 	// Delay is the pause after each step, so edits can be watched.
@@ -68,10 +71,18 @@ func Run(ctx context.Context, eng *engine.Engine, st *store.Store, opts Options)
 		opts.Log = slog.Default()
 	}
 	group := strings.Trim(opts.Group, "/")
-	r := &Runner{eng: eng, st: st, opts: opts, proj: event.Project{
+	proj := event.Project{
 		ID: 990001, Path: group + "/preview/demo", Name: "demo",
 		WebURL: "https://gitlab.com/" + group + "/preview/demo", DefaultBranch: "develop",
-	}}
+	}
+	if group == "" {
+		owner := opts.Owners[0]
+		proj = event.Project{
+			ID: -990001, Path: owner + "/demo", Name: "demo",
+			WebURL: "https://github.com/" + owner + "/demo", DefaultBranch: "develop",
+		}
+	}
+	r := &Runner{eng: eng, st: st, opts: opts, proj: proj}
 	want := opts.Scenarios
 	if len(want) == 0 || slices.Contains(want, "all") {
 		want = Names()

@@ -100,6 +100,9 @@ func ReduceJob(s *PipelineState, ev *event.Job) (changed bool) {
 		s.init(ev.Project, ev.PipelineID)
 		s.CreatedAt = timePtr(ev.CreatedAt)
 		s.URL = ev.Project.WebURL + "/-/pipelines/" + strconv.FormatInt(ev.PipelineID, 10)
+		if ev.Project.IsGitHub() {
+			s.URL = ev.Project.WebURL + "/actions/runs/" + strconv.FormatInt(ev.PipelineID, 10)
+		}
 	}
 	before := snapshot(s)
 

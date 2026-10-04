@@ -13,6 +13,7 @@ import (
 	"github.com/esauvisky/gitgram/internal/actions"
 	"github.com/esauvisky/gitgram/internal/config"
 	"github.com/esauvisky/gitgram/internal/engine"
+	"github.com/esauvisky/gitgram/internal/github"
 	"github.com/esauvisky/gitgram/internal/gitlab/api"
 	"github.com/esauvisky/gitgram/internal/gitlab/webhook"
 	"github.com/esauvisky/gitgram/internal/httpserver"
@@ -52,6 +53,7 @@ func runServe(ctx context.Context, args []string) error {
 		"listen", cfg.Server.Listen,
 		"telegram_mode", cfg.Telegram.Mode,
 		"gitlab_group", cfg.GitLab.Group,
+		"github_owners", cfg.GitHub.Owners,
 		"enrichment", cfg.GitLab.ReadToken != "",
 		"actions", cfg.GitLab.HooksToken != "",
 	)
@@ -70,6 +72,10 @@ func runServe(ctx context.Context, args []string) error {
 	var writer api.Writer
 	if cfg.GitLab.HooksToken != "" {
 		writer = api.New(cfg.GitLab.BaseURL, cfg.GitLab.HooksToken, logger)
+	}
+	var gh *github.Client
+	if len(cfg.GitHub.Owners) > 0 && cfg.GitHub.Token != "" {
+		gh = github.New(cfg.GitHub.APIURL, cfg.GitHub.Token)
 	}
 
 	// The engine notifies the sender, the sender renders through the
@@ -103,7 +109,7 @@ func runServe(ctx context.Context, args []string) error {
 	}
 	logger.Info("telegram bot verified", "username", username, "chat_ids", cfg.Telegram.ChatIDs)
 
-	eng = engine.New(cfg, st, reader, writer, func() { sender.Notify() }, logger)
+	eng = engine.New(cfg, st, reader, writer, gh, func() { sender.Notify() }, logger)
 	chats := cfg.Telegram.ChatIDs
 	sender = telegram.NewSender(client, chats, outboxAdapter{st: st, primary: chats[0]}, eng, logger)
 
@@ -116,8 +122,14 @@ func runServe(ctx context.Context, args []string) error {
 			return st.Ping(ctx)
 		},
 	})
-	srv.Handle("POST "+cfg.Server.GitLabWebhookPath,
-		webhook.NewHandler(cfg.GitLab.WebhookSecret, maxWebhookBody, eng.Handle, logger))
+	if cfg.GitLab.Group != "" {
+		srv.Handle("POST "+cfg.Server.GitLabWebhookPath,
+			webhook.NewHandler(cfg.GitLab.WebhookSecret, maxWebhookBody, eng.Handle, logger))
+	}
+	if len(cfg.GitHub.Owners) > 0 {
+		srv.Handle("POST "+cfg.Server.GitHubWebhookPath,
+			github.NewHandler(cfg.GitHub.WebhookSecret, maxWebhookBody, eng.Handle, logger))
+	}
 	if cfg.Telegram.Mode == telegram.ModeWebhook {
 		srv.Handle("POST "+cfg.Server.TelegramWebhookPath+"/"+cfg.Telegram.WebhookSecret, client.Handler())
 	}

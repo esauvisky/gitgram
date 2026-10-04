@@ -8,7 +8,10 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"slices"
 	"strings"
+
+	"github.com/esauvisky/gitgram/internal/event"
 )
 
 // Config holds every setting the bot reads.
@@ -16,6 +19,7 @@ type Config struct {
 	Telegram Telegram
 	Server   Server
 	GitLab   GitLab
+	GitHub   GitHub
 	Storage  Storage
 	Logging  Logging
 	// LogLines is how many lines of a failed job's log a card shows; 0
@@ -42,6 +46,7 @@ type Server struct {
 	Listen              string
 	PublicBaseURL       string
 	GitLabWebhookPath   string
+	GitHubWebhookPath   string
 	TelegramWebhookPath string
 }
 
@@ -58,6 +63,20 @@ type GitLab struct {
 	// HooksToken (api) enables sync-hooks and the card buttons.
 	HooksToken    string
 	WebhookSecret string
+}
+
+// GitHub configures the GitHub account (organisation or user) the bot
+// serves. No Owners turns GitHub off.
+type GitHub struct {
+	APIURL string
+	// Owners are the organisations and users whose repositories are
+	// accepted.
+	Owners []string
+	// WebhookSecret signs deliveries (X-Hub-Signature-256).
+	WebhookSecret string
+	// Token (repo and actions scopes) enables diff stats, failure logs and
+	// the Stop and Retry buttons on workflow runs.
+	Token string
 }
 
 // Storage is where the SQLite database lives.
@@ -105,6 +124,7 @@ func Load(overrides ...func(*Config)) (*Config, error) {
 			Listen:              env("GITGRAM_LISTEN", ":8080"),
 			PublicBaseURL:       strings.TrimRight(env("GITGRAM_PUBLIC_URL", ""), "/"),
 			GitLabWebhookPath:   "/webhook/gitlab",
+			GitHubWebhookPath:   "/webhook/github",
 			TelegramWebhookPath: "/webhook/telegram",
 		},
 		GitLab: GitLab{
@@ -114,11 +134,21 @@ func Load(overrides ...func(*Config)) (*Config, error) {
 			HooksToken:    env("GITGRAM_GITLAB_HOOKS_TOKEN", ""),
 			WebhookSecret: env("GITGRAM_WEBHOOK_SECRET", ""),
 		},
+		GitHub: GitHub{
+			APIURL:        strings.TrimRight(env("GITGRAM_GITHUB_API_URL", "https://api.github.com"), "/"),
+			WebhookSecret: env("GITGRAM_GITHUB_WEBHOOK_SECRET", ""),
+			Token:         env("GITGRAM_GITHUB_TOKEN", ""),
+		},
 		Storage:  Storage{Path: env("GITGRAM_DB", "/data/gitgram.db")},
 		Logging:  Logging{Level: env("GITGRAM_LOG_LEVEL", "info"), Format: env("GITGRAM_LOG_FORMAT", "text")},
 		LogLines: number("GITGRAM_LOG_LINES", 10),
 	}
 	seen := map[int64]bool{}
+	for _, part := range strings.Split(env("GITGRAM_GITHUB_OWNER", ""), ",") {
+		if o := strings.Trim(strings.TrimSpace(part), "/"); o != "" {
+			c.GitHub.Owners = append(c.GitHub.Owners, o)
+		}
+	}
 	for _, part := range strings.Split(env("GITGRAM_CHAT_ID", ""), ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
@@ -148,8 +178,15 @@ func Load(overrides ...func(*Config)) (*Config, error) {
 
 	required := []struct{ name, value string }{
 		{"GITGRAM_TELEGRAM_TOKEN", c.Telegram.Token},
-		{"GITGRAM_GITLAB_GROUP", c.GitLab.Group},
-		{"GITGRAM_WEBHOOK_SECRET", c.GitLab.WebhookSecret},
+	}
+	if c.GitLab.Group == "" && len(c.GitHub.Owners) == 0 {
+		bad("GITGRAM_GITLAB_GROUP or GITGRAM_GITHUB_OWNER: at least one is required")
+	}
+	if c.GitLab.Group != "" {
+		required = append(required, struct{ name, value string }{"GITGRAM_WEBHOOK_SECRET", c.GitLab.WebhookSecret})
+	}
+	if len(c.GitHub.Owners) > 0 {
+		required = append(required, struct{ name, value string }{"GITGRAM_GITHUB_WEBHOOK_SECRET", c.GitHub.WebhookSecret})
 	}
 	for _, r := range required {
 		if r.value == "" {
@@ -203,8 +240,12 @@ func (c *Config) PreviewChats() []int64 {
 	return c.Telegram.ChatIDs
 }
 
-// Accepts reports whether a project path belongs to the configured group
-// (subgroups included).
-func (c *Config) Accepts(projectPath string) bool {
-	return strings.HasPrefix(projectPath, c.GitLab.Group+"/")
+// Accepts reports whether a project belongs to the configured GitLab group
+// (subgroups included) or to one of the GitHub owners.
+func (c *Config) Accepts(p event.Project) bool {
+	if p.IsGitHub() {
+		owner := strings.SplitN(p.Path, "/", 2)[0]
+		return slices.ContainsFunc(c.GitHub.Owners, func(o string) bool { return strings.EqualFold(o, owner) })
+	}
+	return c.GitLab.Group != "" && (p.Path == c.GitLab.Group || strings.HasPrefix(p.Path, c.GitLab.Group+"/"))
 }

@@ -44,15 +44,37 @@ func (e *Engine) Can(k actions.Kind, a actions.Action) bool {
 	return false
 }
 
+// canGitHub is the capability set of GitHub repositories: with a client
+// (which needs a token), workflow runs can be stopped (after a confirmation) and their failed
+// jobs re-run.
+func (e *Engine) canGitHub(k actions.Kind, a actions.Action) bool {
+	if e.gh == nil || k != actions.KindPipeline {
+		return false
+	}
+	switch a {
+	case actions.ActionCancel, actions.ActionCancelYes, actions.ActionCancelNo, actions.ActionRetry:
+		return true
+	}
+	return false
+}
+
+// githubCaps offers the GitHub capability set to the renderer.
+type githubCaps struct{ e *Engine }
+
+func (c githubCaps) Can(k actions.Kind, a actions.Action) bool { return c.e.canGitHub(k, a) }
+
 // Dispatch implements actions.Dispatcher. Stop and its "keep running"
 // answer only flip the card's confirmation; "yes, stop it" and Retry make
-// the GitLab call and answer with a toast, and the resulting webhooks
-// update the card.
+// the GitLab or GitHub call (by the project's host) and answer with a
+// toast, and the resulting webhooks update the card.
 func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Result, error) {
-	if e.writer == nil {
+	gh := req.ProjectID < 0
+	switch {
+	case gh && !e.canGitHub(req.Kind, req.Action):
+		return actions.Result{Toast: "This button is no longer valid.", Alert: true}, nil
+	case !gh && e.writer == nil:
 		return actions.Result{Toast: "Actions need GITGRAM_GITLAB_HOOKS_TOKEN.", Alert: true}, nil
-	}
-	if !e.Can(req.Kind, req.Action) {
+	case !gh && !e.Can(req.Kind, req.Action):
 		return actions.Result{Toast: "This button is no longer valid.", Alert: true}, nil
 	}
 	if req.Kind == actions.KindMergeRequest {
@@ -71,6 +93,9 @@ func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Res
 			return actions.Result{}, err
 		}
 		return actions.Result{Toast: "Pipeline keeps running."}, nil
+	}
+	if gh {
+		return e.dispatchGitHub(ctx, req, key)
 	}
 	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
 	defer cancel()
@@ -192,4 +217,34 @@ func (e *Engine) setConfirmMerge(ctx context.Context, key cards.Key, on bool) er
 	}
 	e.notify()
 	return nil
+}
+
+// dispatchGitHub performs a confirmed stop or a retry on a GitHub workflow
+// run.
+func (e *Engine) dispatchGitHub(ctx context.Context, req actions.Request, key cards.Key) (actions.Result, error) {
+	if err := e.setConfirmStop(ctx, key, false); err != nil {
+		return actions.Result{}, err
+	}
+	row, err := e.st.GetObject(ctx, skey(key))
+	if err != nil || row == nil {
+		return actions.Result{Toast: "This workflow run is no longer known.", Alert: true}, err
+	}
+	var st cards.PipelineState
+	if err := unmarshalState(*row, &st); err != nil {
+		return actions.Result{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
+	defer cancel()
+	toast := "Stopping workflow run"
+	if req.Action == actions.ActionRetry {
+		err, toast = e.gh.RerunFailed(ctx, st.Project.Path, req.ObjectID), "Re-running the failed jobs"
+	} else {
+		err = e.gh.CancelRun(ctx, st.Project.Path, req.ObjectID)
+	}
+	if err != nil {
+		e.log.Warn("action failed", "action", req.Action, "repo", st.Project.Path, "run", req.ObjectID, "user", req.TelegramUserID, "err", err)
+		return actions.Result{Toast: "GitHub call failed: " + shortError(err), Alert: true}, nil
+	}
+	e.log.Info("action done", "action", req.Action, "repo", st.Project.Path, "run", req.ObjectID, "user", req.TelegramUserID)
+	return actions.Result{Toast: toast}, nil
 }

@@ -50,6 +50,10 @@ type MergeRequest struct {
 	Author User
 
 	DetailedMergeStatus string
+	// Additions, Deletions and ChangedFiles are the line counts GitHub puts
+	// in pull request payloads; zero for GitLab, whose counts come from
+	// the API.
+	Additions, Deletions, ChangedFiles int
 	// HeadPipelineID is head_pipeline_id, nil when the payload has none.
 	HeadPipelineID *int64
 	MergedAt       *time.Time

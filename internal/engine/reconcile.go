@@ -52,6 +52,9 @@ func (e *Engine) reconcile(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		if row.ProjectID < 0 {
+			continue // GitHub workflow runs are not re-read
+		}
 		e.reconcilePipeline(ctx, row)
 	}
 }

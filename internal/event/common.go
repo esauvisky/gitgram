@@ -8,7 +8,8 @@ import (
 // signal ref creation or deletion.
 const ZeroSHA = "0000000000000000000000000000000000000000"
 
-// Project identifies the GitLab project an event belongs to.
+// Project identifies the GitLab project or GitHub repository an event
+// belongs to.
 type Project struct {
 	ID int64
 	// Path is path_with_namespace, e.g. "my-org/backend". Project filtering
@@ -21,6 +22,11 @@ type Project struct {
 	// DefaultBranch is the project's default branch name.
 	DefaultBranch string
 }
+
+// IsGitHub reports whether the project is a GitHub repository: those are
+// stored with negative ids (minus the repository id) so they never collide
+// with GitLab project ids.
+func (p Project) IsGitHub() bool { return p.ID < 0 }
 
 // User is a GitLab user as it appears in webhook payloads.
 type User struct {

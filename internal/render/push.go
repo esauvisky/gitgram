@@ -63,12 +63,12 @@ func pushMoreURL(s *cards.PushState) string {
 		return ""
 	}
 	if s.Before != event.ZeroSHA && s.Before != "" && s.After != "" {
-		return s.Project.WebURL + "/-/compare/" + s.Before + "..." + s.After
+		return webPath(s.Project, "/-/compare/"+s.Before+"..."+s.After)
 	}
 	if s.Created && s.After != "" && s.Project.DefaultBranch != "" && s.Project.DefaultBranch != s.Branch {
-		return s.Project.WebURL + "/-/compare/" + s.Project.DefaultBranch + "..." + s.After
+		return webPath(s.Project, "/-/compare/"+s.Project.DefaultBranch+"..."+s.After)
 	}
-	return s.Project.WebURL + "/-/commits/" + s.Branch
+	return webPath(s.Project, "/-/commits/"+s.Branch)
 }
 
 // diffSummary is the push's line counts: `+23, -46 lines on 4 files`.

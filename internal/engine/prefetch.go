@@ -39,6 +39,9 @@ type enrichment struct {
 // place), failure logs and artifacts for pipelines, diff stats and the
 // unresolved thread count for merge requests. Failures are logged and degrade to no enrichment.
 func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
+	if ev.Proj().IsGitHub() {
+		return e.prefetchGitHub(ctx, ev)
+	}
 	if e.api == nil {
 		return enrichment{}
 	}
@@ -74,6 +77,54 @@ func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 			en.diff = diffStats(diffs)
 		}
 		return en
+	}
+	return enrichment{}
+}
+
+// prefetchGitHub is prefetch for GitHub repositories: diff stats for
+// pushes from the compare call, failure logs for workflow runs and jobs,
+// and an MR's diff stats from the counts the pull_request payload carries.
+// There are no artifacts and no thread counts.
+func (e *Engine) prefetchGitHub(ctx context.Context, ev event.Event) enrichment {
+	switch v := ev.(type) {
+	case *event.MergeRequest:
+		if v.ChangedFiles == 0 {
+			return enrichment{}
+		}
+		return enrichment{diff: &cards.DiffStats{FilesChanged: v.ChangedFiles, Added: v.Additions, Removed: v.Deletions}}
+	}
+	if e.gh == nil {
+		return enrichment{}
+	}
+	switch v := ev.(type) {
+	case *event.Push:
+		if v.IsCreate() || v.IsDelete() {
+			return enrichment{}
+		}
+		ctx, cancel := context.WithTimeout(ctx, prefetchTimeout)
+		defer cancel()
+		files, err := e.gh.Compare(ctx, v.Project.Path, v.Before, v.After)
+		if err != nil {
+			e.logEnrich("compare", v.Project.Path, err)
+			return enrichment{}
+		}
+		d := &cards.DiffStats{FilesChanged: len(files)}
+		for i, f := range files {
+			d.Added += f.Additions
+			d.Removed += f.Deletions
+			if i < cards.MaxDiffFiles {
+				df := cards.DiffFile{Path: f.Filename, New: f.Status == "added", Deleted: f.Status == "removed", Added: f.Additions, Removed: f.Deletions}
+				if f.Status == "renamed" {
+					df.RenamedFrom = f.PreviousFilename
+				}
+				d.Files = append(d.Files, df)
+			}
+		}
+		return enrichment{diff: d}
+	case *event.Pipeline:
+		return e.enrichFailedTails(ctx, v.Project, v.ID, v.Jobs)
+	case *event.Job:
+		return e.enrichFailedTails(ctx, v.Project, v.PipelineID, []event.Job{*v})
 	}
 	return enrichment{}
 }

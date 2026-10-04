@@ -13,6 +13,7 @@ import (
 
 	"github.com/esauvisky/gitgram/internal/config"
 	"github.com/esauvisky/gitgram/internal/event"
+	"github.com/esauvisky/gitgram/internal/github"
 	"github.com/esauvisky/gitgram/internal/gitlab/api"
 	"github.com/esauvisky/gitgram/internal/store"
 )
@@ -30,6 +31,8 @@ type Engine struct {
 	st     *store.Store
 	api    api.Reader
 	writer api.Writer
+	// gh is the GitHub client, nil without a GitHub token.
+	gh     *github.Client
 	notify func()
 	log    *slog.Logger
 }
@@ -37,13 +40,14 @@ type Engine struct {
 // New returns an Engine. reader may be nil when no GITGRAM_GITLAB_TOKEN is
 // configured: enrichment, log tails and the reconciler are then disabled.
 // writer may be nil when no GITGRAM_GITLAB_HOOKS_TOKEN is configured: cards then
-// carry no action buttons. notify is called after every committed
+// carry no action buttons. gh may be nil when GitHub is not configured.
+// notify is called after every committed
 // transaction that added outbox rows (the sender's Notify).
-func New(cfg *config.Config, st *store.Store, reader api.Reader, writer api.Writer, notify func(), logger *slog.Logger) *Engine {
+func New(cfg *config.Config, st *store.Store, reader api.Reader, writer api.Writer, gh *github.Client, notify func(), logger *slog.Logger) *Engine {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Engine{cfg: cfg, st: st, api: reader, writer: writer, notify: notify, log: logger}
+	return &Engine{cfg: cfg, st: st, api: reader, writer: writer, gh: gh, notify: notify, log: logger}
 }
 
 // Handle processes one webhook delivery. It returns an error only when the
@@ -52,8 +56,8 @@ func New(cfg *config.Config, st *store.Store, reader api.Reader, writer api.Writ
 func (e *Engine) Handle(ctx context.Context, deliveryKey string, ev event.Event) error {
 	proj := ev.Proj()
 	log := e.log.With("kind", ev.EventKind(), "project", proj.Path)
-	if proj.Path != e.cfg.GitLab.Group && !e.cfg.Accepts(proj.Path) {
-		log.Debug("event outside configured group")
+	if !e.cfg.Accepts(proj) {
+		log.Debug("event outside the configured group or owner")
 		return nil
 	}
 

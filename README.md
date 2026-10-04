@@ -8,7 +8,7 @@
 
 ---
 
-Gitgram is a self-hosted bot that takes every project under one gitlab.com group and turns its webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. Today it covers pushes, pipelines and merge requests; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
+Gitgram is a self-hosted bot that takes every project under one gitlab.com group and turns its webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. Today it covers pushes, pipelines and merge requests, and the same for GitHub repositories (pushes, Actions workflow runs and pull requests) in the same bot; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
 
 It exists because [Integram](https://github.com/requilence/integram) was archived, GitLab's built-in Telegram integration sends one flat line per event and calls it a day, and every other bot on GitHub either stopped in 2022 or only does DMs.
 
@@ -47,6 +47,15 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 
 One token with `api` covers both. A group access token works too.
 
+### 2b. GitHub (optional)
+
+Set `GITGRAM_GITHUB_OWNER` to the users or organizations whose repositories are accepted (comma-separated), and `GITGRAM_GITHUB_WEBHOOK_SECRET` to the webhook secret. Then add a webhook on each organization, and on each repository of a user account (users have no account-wide webhooks):
+
+- Payload URL `<GITGRAM_PUBLIC_URL>/webhook/github`, content type `application/json`, the same secret.
+- Events: Pushes, Workflow runs, Workflow jobs, Pull requests.
+
+`GITGRAM_GITHUB_TOKEN` is optional. A fine-grained token with Contents read and Actions read/write on those repositories adds push diff stats, failure logs, and the Stop and Retry buttons on workflow runs. GitHub cards follow the GitLab layout: a workflow run is a pipeline card with one line per job, a pull request is a merge request card. They have no Merge or Run buttons, no artifacts and no thread counts, and the reconciler does not re-read them. A push that starts several workflows shows the first one on the push card and the others as their own cards. With only GitHub configured, `GITGRAM_GITLAB_GROUP` and `GITGRAM_WEBHOOK_SECRET` can be left empty.
+
 ### 3. Run
 
 Prebuilt multi-arch images (amd64, arm64) live at `ghcr.io/esauvisky/gitgram`. No clone needed:
@@ -79,10 +88,14 @@ Everything comes from `GITGRAM_*` environment variables; under Docker Compose th
 | `GITGRAM_PUBLIC_URL` | required for webhook mode and sync-hooks | external base URL; GitLab delivers to `/webhook/gitlab`, Telegram to `/webhook/telegram/<secret>` |
 | `GITGRAM_LISTEN` | `:8080` | listen address |
 | `GITGRAM_GITLAB_URL` | `https://gitlab.com` | instance URL |
-| `GITGRAM_GITLAB_GROUP` | required | top-level group; subgroups included, other projects ignored |
-| `GITGRAM_WEBHOOK_SECRET` | required | `X-Gitlab-Token` value |
+| `GITGRAM_GITLAB_GROUP` | required unless `GITGRAM_GITHUB_OWNER` is set | top-level group; subgroups included, other projects ignored |
+| `GITGRAM_WEBHOOK_SECRET` | required with a group | `X-Gitlab-Token` value |
 | `GITGRAM_GITLAB_TOKEN` | | `read_api` token |
 | `GITGRAM_GITLAB_HOOKS_TOKEN` | | `api` token for sync-hooks and the buttons |
+| `GITGRAM_GITHUB_OWNER` | | GitHub users or organizations whose repositories are accepted, comma-separated; enables `/webhook/github` |
+| `GITGRAM_GITHUB_WEBHOOK_SECRET` | required with an owner | GitHub webhook secret (checked against `X-Hub-Signature-256`) |
+| `GITGRAM_GITHUB_TOKEN` | | GitHub token for diff stats, failure logs, and Stop and Retry |
+| `GITGRAM_GITHUB_API_URL` | `https://api.github.com` | API base; GitHub Enterprise uses `https://<host>/api/v3` |
 | `GITGRAM_LOG_LINES` | `10` | log lines shown for a failed job; `0` disables them |
 | `GITGRAM_DB` | `/data/gitgram.db` | SQLite file |
 | `GITGRAM_LOG_LEVEL` / `GITGRAM_LOG_FORMAT` | `info` / `text` | slog level; `text` or `json` |
@@ -93,6 +106,8 @@ Everything comes from `GITGRAM_*` environment variables; under Docker Compose th
 - **Premium/Ultimate**: `gitgram sync-hooks --group-hook` registers a single group webhook. Don't do both; every event arrives twice and you get to pay for deduplicating it.
 
 Endpoint: `POST <GITGRAM_PUBLIC_URL>/webhook/gitlab`. Events to enable: Push, Job, Pipeline, Merge request. Other events are accepted and ignored.
+
+GitHub: `POST <GITGRAM_PUBLIC_URL>/webhook/github`, set up by hand as described in [GitHub](#2b-github-optional). `sync-hooks` is GitLab only.
 
 ## How cards behave
 

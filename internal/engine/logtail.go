@@ -19,11 +19,25 @@ const maxTailLineLen = 120
 // ansi matches CSI escape sequences (colours, cursor moves, erase-line).
 var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
 
+// actionsLog matches the timestamp GitHub Actions puts before every log
+// line and the workflow command marker (##[group], ##[error]) after it.
+var actionsLog = regexp.MustCompile(`(?m)^\d{4}-\d\d-\d\dT[\d:.]+Z ?(##\[[a-z]+\])?`)
+
 // fetchTail reads one job's trace and keeps its last n lines.
 func (e *Engine) fetchTail(ctx context.Context, st *cards.PipelineState, j cards.JobState, n int, now time.Time, final bool) (*cards.JobTail, bool) {
 	ctx, cancel := context.WithTimeout(ctx, traceTimeout)
 	defer cancel()
-	trace, err := e.api.JobTrace(ctx, st.Project.ID, j.ID)
+	var trace string
+	var err error
+	if st.Project.IsGitHub() {
+		if e.gh == nil {
+			return nil, false
+		}
+		trace, err = e.gh.JobLog(ctx, st.Project.Path, j.ID)
+		trace = actionsLog.ReplaceAllString(trace, "")
+	} else {
+		trace, err = e.api.JobTrace(ctx, st.Project.ID, j.ID)
+	}
 	if err != nil {
 		e.logEnrich("trace", st.Project.Path, err)
 		return nil, false

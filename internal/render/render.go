@@ -101,13 +101,30 @@ func headline(b *htmlfmt.Builder, lead, prep string, p event.Project, ref string
 	b.Line(line)
 }
 
+// webPath is the URL of one of the project's pages, given as its GitLab
+// path ("/-/tree/x"); on GitHub the same page lives at a different path
+// ("/tree/x"; pipelines are "/actions", merge requests "/pulls", tags
+// "/releases/tag/x").
+func webPath(p event.Project, path string) string {
+	if !p.IsGitHub() {
+		return p.WebURL + path
+	}
+	path = strings.TrimPrefix(path, "/-")
+	for gl, gh := range map[string]string{"/pipelines": "/actions", "/merge_requests": "/pulls", "/tags/": "/releases/tag/"} {
+		if strings.HasPrefix(path, gl) {
+			return p.WebURL + gh + strings.TrimPrefix(path, gl)
+		}
+	}
+	return p.WebURL + path
+}
+
 // tagRef is a tag as a code chip linked to its page.
 func tagRef(p event.Project, tag string) string {
 	chip := htmlfmt.Code(tag)
 	if p.WebURL == "" {
 		return chip
 	}
-	return `<a href="` + htmlfmt.Esc(p.WebURL+"/-/tags/"+tag) + `">` + chip + "</a>"
+	return `<a href="` + htmlfmt.Esc(webPath(p, "/-/tags/"+tag)) + `">` + chip + "</a>"
 }
 
 // projectPage is text linked to one of the project's pages (path under
@@ -116,7 +133,7 @@ func projectPage(text string, p event.Project, path string) string {
 	if p.WebURL == "" {
 		return htmlfmt.Esc(text)
 	}
-	return htmlfmt.A(text, p.WebURL+path)
+	return htmlfmt.A(text, webPath(p, path))
 }
 
 // branchRef is a branch as a code chip linked to its tree.
@@ -125,7 +142,7 @@ func branchRef(p event.Project, branch string) string {
 	if p.WebURL == "" {
 		return chip
 	}
-	return `<a href="` + htmlfmt.Esc(p.WebURL+"/-/tree/"+branch) + `">` + chip + "</a>"
+	return `<a href="` + htmlfmt.Esc(webPath(p, "/-/tree/"+branch)) + `">` + chip + "</a>"
 }
 
 // who is the actor's handle in bold, "Someone" when the payload names

@@ -64,7 +64,7 @@ func (e *Engine) applyBranchDeleted(ctx context.Context, tx *store.Tx, ev *event
 	if marked, err := e.markSourceBranchDeleted(ctx, tx, ev); err != nil || marked {
 		return err
 	}
-	payload, err := json.Marshal(render.BranchDeleted(ev, e.options()))
+	payload, err := json.Marshal(render.BranchDeleted(ev, e.options(ev.Project)))
 	if err != nil {
 		return fmt.Errorf("encode branch deletion: %w", err)
 	}
