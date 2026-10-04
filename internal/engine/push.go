@@ -160,7 +160,14 @@ func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.K
 	confirmed := st.SeenPipelineEvent && st.Source == "push"
 	if row == nil {
 		if !confirmed {
-			return false, false, nil
+			// Job Hooks often beat both the Pipeline Hook and a Push Hook
+			// still in its diff fetch: a young pipeline of unknown source
+			// with no card yet waits for them, up to pushWait.
+			if st.SeenPipelineEvent || st.CreatedAt == nil || received.Sub(*st.CreatedAt) >= pushWait {
+				return false, false, nil
+			}
+			ownCard, err := tx.GetCard(ctx, skey(key))
+			return false, ownCard == nil, err
 		}
 		push = cards.NewPushSkeleton(st.Project, st.Ref, st.SHA)
 	}

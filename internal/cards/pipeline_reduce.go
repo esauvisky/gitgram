@@ -98,6 +98,7 @@ func ReducePipeline(s *PipelineState, ev *event.Pipeline) (changed bool) {
 func ReduceJob(s *PipelineState, ev *event.Job) (changed bool) {
 	if s.SchemaVer == 0 {
 		s.init(ev.Project, ev.PipelineID)
+		s.CreatedAt = timePtr(ev.CreatedAt)
 		s.URL = ev.Project.WebURL + "/-/pipelines/" + strconv.FormatInt(ev.PipelineID, 10)
 	}
 	before := snapshot(s)
