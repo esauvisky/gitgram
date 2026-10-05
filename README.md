@@ -4,11 +4,16 @@
 
 <h1 align="center">Gitgram</h1>
 
-<p align="center">GitLab webhooks → one Telegram group. Cards that edit themselves instead of forty messages nobody reads.</p>
+<p align="center">GitLab and GitHub webhooks → one Telegram group. Cards that edit themselves instead of forty messages nobody reads.</p>
 
 ---
 
-Gitgram is a self-hosted bot that takes every project under one gitlab.com group and turns its webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. Today it covers pushes, pipelines and merge requests, and the same for GitHub repositories (pushes, Actions workflow runs and pull requests) in the same bot; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
+Gitgram is a self-hosted bot that takes every project under a GitLab group, every repository of your GitHub organizations and accounts, or both at once, and turns their webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. It covers pushes, pipelines and merge requests on GitLab, and pushes, Actions workflow runs and pull requests on GitHub; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
+
+<p align="center">
+  <img src="assets/preview.gif" width="440" alt="The /preview command in a Telegram group: push, force-push and merge request cards appear and edit themselves as their mock pipelines run, pass and fail">
+</p>
+<p align="center"><sub>The <code>/preview</code> command: mock cards going through the real engine, edited in place as their pipelines run.</sub></p>
 
 It exists because [Integram](https://github.com/requilence/integram) was archived, GitLab's built-in Telegram integration sends one flat line per event and calls it a day, and every other bot on GitHub either stopped in 2022 or only does DMs.
 
@@ -23,8 +28,9 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 - **Stop, Retry, Run and Merge**: a running pipeline carries `Stop pipeline`, which asks `Yes, stop it` / `Keep running` before canceling; a failed one carries `Retry`, no questions asked; a manual job waiting to start gets `Run <job>`. Needs `gitlab.hooks_token`; anyone in the group may press. Everything else is a link in the text.
 - **Merge request cards**: `@ada opened a MR in demo (feat/x → develop)`, the MR title in bold, the description and line counts in a fold, unresolved threads, the MR's head pipeline with its stage lines, and last, in bold, `Merged into develop by @linus`, `Closed by @ada`, or while open `Draft` and `⚠️ Conflicts with develop`. Deleting the MR's source branch adds `The branch x was deleted.` under that line instead of posting a separate message. A merge request pipeline shows only there. `Merge` (with a confirmation) appears while GitLab reports the MR as mergeable.
 - **Push cards**: `@ada pushed to agent (feat/x)`, the commits in one quote as `author: title`, closed by the line counts (`+23, -46 lines on 4 files`), and the pipeline that push triggered, all edited in place. A newer push to the same branch gets its own card. Branch created and deleted, and a force-push warning (detected via the API, because GitLab doesn't tell you).
+- **GitHub too**: pushes, Actions workflow runs and pull requests from any number of organizations and user accounts, in the same cards and the same group as GitLab. A workflow run is a pipeline card with one line per job, a pull request is a merge request card. With a token: diff stats, failure logs, and Stop and Retry. See [GitHub](#2b-github-optional).
 - **Handles, not pings**: people show as bold `@gitlab-user` that never links to a Telegram account, so a card never notifies anyone.
-- **Reconciler**: cards that stopped receiving events get re-read from the GitLab API. GitLab does not retry failed webhook deliveries, ever, so somebody has to.
+- **Reconciler**: GitLab cards that stopped receiving events get re-read from the GitLab API. GitLab does not retry failed webhook deliveries, ever, so somebody has to.
 - **`sync-hooks`**: registers the webhook on every project in the group, or one group hook if you pay for Premium.
 - Everything else is a tap away through the links in the card; there are no link buttons.
 
@@ -70,7 +76,7 @@ docker compose exec gitgram /gitgram sync-hooks --dry-run
 docker compose exec gitgram /gitgram sync-hooks
 ```
 
-Put a TLS-terminating reverse proxy in front of `127.0.0.1:8080` and set `GITGRAM_PUBLIC_URL` to whatever GitLab can reach. With `GITGRAM_TELEGRAM_MODE=polling` Telegram needs no public URL at all; GitLab still does.
+Put a TLS-terminating reverse proxy in front of `127.0.0.1:8080` and set `GITGRAM_PUBLIC_URL` to whatever GitLab and GitHub can reach. With `GITGRAM_TELEGRAM_MODE=polling` Telegram needs no public URL at all; GitLab and GitHub still do.
 
 Pin a version with `VERSION=0.1.0 docker compose up -d`. To build locally instead of pulling: clone the repo and `docker compose up -d --build`. Without Docker: `set -a; . ./.env; set +a; go run ./cmd/gitgram serve --poll`, with `GITGRAM_DB` pointing somewhere writable.
 
@@ -85,7 +91,7 @@ Everything comes from `GITGRAM_*` environment variables; under Docker Compose th
 | `GITGRAM_DEBUG_CHAT_ID` | | chat that receives `gitgram preview` mock cards instead of `GITGRAM_CHAT_ID`; `/preview` works there too |
 | `GITGRAM_TELEGRAM_MODE` | `webhook` | `webhook` or `polling` |
 | `GITGRAM_TG_WEBHOOK_SECRET` | required in webhook mode | URL suffix and `secret_token` for Telegram updates |
-| `GITGRAM_PUBLIC_URL` | required for webhook mode and sync-hooks | external base URL; GitLab delivers to `/webhook/gitlab`, Telegram to `/webhook/telegram/<secret>` |
+| `GITGRAM_PUBLIC_URL` | required for webhook mode and sync-hooks | external base URL; GitLab delivers to `/webhook/gitlab`, GitHub to `/webhook/github`, Telegram to `/webhook/telegram/<secret>` |
 | `GITGRAM_LISTEN` | `:8080` | listen address |
 | `GITGRAM_GITLAB_URL` | `https://gitlab.com` | instance URL |
 | `GITGRAM_GITLAB_GROUP` | required unless `GITGRAM_GITHUB_OWNER` is set | top-level group; subgroups included, other projects ignored |
@@ -120,7 +126,7 @@ GitHub: `POST <GITGRAM_PUBLIC_URL>/webhook/github`, set up by hand as described 
 
 ## Preview
 
-`gitgram preview` sends a mock card of every kind and scenario to `GITGRAM_DEBUG_CHAT_ID` (or, without one, to every `GITGRAM_CHAT_ID` chat): pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, a passing and a manual pipeline, and a merge request opened → merged plus a closed draft. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
+`gitgram preview` sends a mock card of every kind and scenario to `GITGRAM_DEBUG_CHAT_ID` (or, without one, to every `GITGRAM_CHAT_ID` chat): pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, a passing and a manual pipeline, and a merge request opened → merged plus a closed draft. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab or GitHub, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
 
 ## Not supported yet
 
