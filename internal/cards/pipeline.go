@@ -194,8 +194,9 @@ func (s *PipelineState) ChildKey() (Key, bool) {
 // EffectiveStatus is the status the card should display. For a skeleton it
 // is derived from the jobs (pending when there are none). Once a Pipeline
 // Hook was seen it is the reported status, except that a terminal or blocked
-// pipeline whose jobs are active again (retry, played manual job) shows the
-// job-derived status until the next Pipeline Hook.
+// pipeline whose jobs are active again (retry, played manual job) or
+// waiting for manual action again (a retry recreated a manual job) shows
+// the job-derived status until the next Pipeline Hook.
 func (s *PipelineState) EffectiveStatus() string {
 	derived := s.derivedStatus()
 	if !s.SeenPipelineEvent {
@@ -204,7 +205,7 @@ func (s *PipelineState) EffectiveStatus() string {
 		}
 		return derived
 	}
-	if (event.IsTerminal(s.Status) || event.IsBlocked(s.Status)) && live(derived) {
+	if (event.IsTerminal(s.Status) || event.IsBlocked(s.Status)) && (live(derived) || event.IsBlocked(derived)) {
 		return derived
 	}
 	return s.Status

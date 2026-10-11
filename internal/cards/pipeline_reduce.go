@@ -133,6 +133,9 @@ func ReduceJob(s *PipelineState, ev *event.Job) (changed bool) {
 			return false
 		}
 		js.SupersededBy = cur.SupersededBy
+		// Job Hooks carry no when:, only the Pipeline Hook (or a manual
+		// status) says so; a played manual job stays manual.
+		js.Manual = js.Manual || cur.Manual
 		s.Jobs[ev.ID] = js
 	} else {
 		s.Jobs[ev.ID] = js
