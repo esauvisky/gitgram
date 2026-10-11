@@ -81,6 +81,16 @@ func (c *Client) Compare(ctx context.Context, repo, base, head string) ([]Compar
 	return out.Files, err
 }
 
+// CommitFiles is GET /repos/:repo/commits/:sha: the files the commit
+// changed.
+func (c *Client) CommitFiles(ctx context.Context, repo, sha string) ([]CompareFile, error) {
+	var out struct {
+		Files []CompareFile `json:"files"`
+	}
+	_, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/commits/%s", repo, sha), &out)
+	return out.Files, err
+}
+
 // JobLog is GET /repos/:repo/actions/jobs/:id/logs: the job's plain log
 // (GitHub redirects to storage; the client follows without the token).
 func (c *Client) JobLog(ctx context.Context, repo string, jobID int64) (string, error) {

@@ -16,6 +16,9 @@ type Reader interface {
 	// MRDiffs pages through GET .../merge_requests/:iid/diffs: one entry per
 	// changed file.
 	MRDiffs(ctx context.Context, projectID, iid int64) ([]Diff, error)
+	// CommitDiff pages through GET .../repository/commits/:sha/diff: one
+	// entry per file the commit changed.
+	CommitDiff(ctx context.Context, projectID int64, sha string) ([]Diff, error)
 	// Pipeline is GET /projects/:id/pipelines/:pipeline_id.
 	Pipeline(ctx context.Context, projectID, id int64) (*Pipeline, error)
 	// PipelineJobs pages through GET .../pipelines/:pipeline_id/jobs;

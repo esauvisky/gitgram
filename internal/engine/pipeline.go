@@ -38,6 +38,10 @@ func (e *Engine) applyPipeline(ctx context.Context, tx *store.Tx, ev event.Event
 		st.Artifacts = en.artifacts
 		changed = true
 	}
+	if en.diff != nil && st.Diff == nil {
+		st.Diff = en.diff
+		changed = true
+	}
 	if err := put(ctx, tx, key, st, st.Final, latest(row, ev.ReceivedAt())); err != nil {
 		return err
 	}

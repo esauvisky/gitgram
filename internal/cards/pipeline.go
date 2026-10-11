@@ -43,6 +43,9 @@ type PipelineState struct {
 
 	Triggerer event.User
 	Commit    event.Commit
+	// Diff is what Commit changed, fetched once from the API for the
+	// pipeline's own card; nil until then.
+	Diff *DiffStats
 
 	// ConfirmStop is set while someone pressed Stop and the card is asking
 	// to confirm; cleared by the answer or a retry.

@@ -32,7 +32,7 @@ func viewPipeline(s *cards.PipelineState) *pipelineView {
 
 // Pipeline renders a pipeline card: the title (`@emi ran a pipeline in
 // demo (main)`, fixed once posted), the commit quoted like a push's commit
-// row, and one line per stage that carries the result (mark, state, time,
+// row and closed by its line counts, and one line per stage that carries the result (mark, state, time,
 // artifacts, the failed job's log under its stage). A pipeline that a push card
 // absorbs is rendered there instead with the same stage lines.
 func Pipeline(s *cards.PipelineState, o Options) Message {
@@ -52,7 +52,11 @@ func Pipeline(s *cards.PipelineState, o Options) Message {
 	}
 	headline(&b, lead, "in", s.Project, ref)
 	if s.Commit.SHA != "" || s.Commit.Title != "" {
-		b.Quote(commitLine(s.Commit, commitAuthor(s.Commit, s.Triggerer)), false)
+		rows := []string{commitLine(s.Commit, commitAuthor(s.Commit, s.Triggerer))}
+		if d := diffSummary(s.Diff); d != "" {
+			rows = append(rows, "", "<i>"+d+"</i>")
+		}
+		b.Quote(strings.Join(rows, "\n"), false)
 	}
 	pipelineBody(s, v, &b)
 	taglineFooter(&b, "pipeline:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.ID, 10))

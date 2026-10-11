@@ -60,6 +60,11 @@ type Commit struct {
 	WebURL      string    `json:"web_url"`
 }
 
+// CommitDiff implements Reader.
+func (c *Client) CommitDiff(ctx context.Context, projectID int64, sha string) ([]Diff, error) {
+	return getPages[Diff](ctx, c, fmt.Sprintf("/projects/%d/repository/commits/%s/diff", projectID, sha), nil)
+}
+
 // Compare implements Reader.
 func (c *Client) Compare(ctx context.Context, projectID int64, from, to string, straight bool) (*Compare, error) {
 	q := url.Values{

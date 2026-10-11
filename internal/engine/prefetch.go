@@ -7,6 +7,7 @@ import (
 
 	"github.com/esauvisky/gitgram/internal/cards"
 	"github.com/esauvisky/gitgram/internal/event"
+	"github.com/esauvisky/gitgram/internal/github"
 	"github.com/esauvisky/gitgram/internal/gitlab/api"
 	"github.com/esauvisky/gitgram/internal/store"
 )
@@ -25,8 +26,8 @@ type enrichment struct {
 	// artifacts lists the archives a terminal pipeline's jobs produced;
 	// nil when not fetched.
 	artifacts []cards.Artifact
-	// diff holds a push's diff stats from the compare call, or an MR's from
-	// the diffs call; nil when not fetched.
+	// diff holds a push's diff stats from the compare call, an MR's from
+	// the diffs call, or a pipeline's commit's; nil when not fetched.
 	diff *cards.DiffStats
 	// unresolved is an MR's unresolved thread count; threads is true when
 	// it was fetched.
@@ -36,8 +37,9 @@ type enrichment struct {
 
 // prefetch performs the read-only enrichment before the transaction:
 // force-push detection and diff stats for pushes (setting Push.Forced in
-// place), failure logs and artifacts for pipelines, diff stats and the
-// unresolved thread count for merge requests. Failures are logged and degrade to no enrichment.
+// place), failure logs, artifacts and the commit's diff stats for
+// pipelines, diff stats and the unresolved thread count for merge requests.
+// Failures are logged and degrade to no enrichment.
 func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 	if ev.Proj().IsGitHub() {
 		return e.prefetchGitHub(ctx, ev)
@@ -74,6 +76,15 @@ func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 		en := e.enrichFailedTails(ctx, v.Project, v.ID, v.Jobs)
 		if event.IsTerminal(v.Status) {
 			en.artifacts = e.enrichArtifacts(ctx, v.Project, v.ID)
+		}
+		if e.wantsCommitDiff(ctx, v) {
+			ctx, cancel := context.WithTimeout(ctx, prefetchTimeout)
+			defer cancel()
+			if diffs, err := e.api.CommitDiff(ctx, v.Project.ID, v.SHA); err != nil {
+				e.logEnrich("commit diff", v.Project.Path, err)
+			} else {
+				en.diff = diffStats(diffs, false)
+			}
 		}
 		return en
 	case *event.Job:
@@ -119,25 +130,56 @@ func (e *Engine) prefetchGitHub(ctx context.Context, ev event.Event) enrichment 
 			e.logEnrich("compare", v.Project.Path, err)
 			return enrichment{}
 		}
-		d := &cards.DiffStats{FilesChanged: len(files)}
-		for i, f := range files {
-			d.Added += f.Additions
-			d.Removed += f.Deletions
-			if i < cards.MaxDiffFiles {
-				df := cards.DiffFile{Path: f.Filename, New: f.Status == "added", Deleted: f.Status == "removed", Added: f.Additions, Removed: f.Deletions}
-				if f.Status == "renamed" {
-					df.RenamedFrom = f.PreviousFilename
-				}
-				d.Files = append(d.Files, df)
+		return enrichment{diff: githubDiffStats(files)}
+	case *event.Pipeline:
+		en := e.enrichFailedTails(ctx, v.Project, v.ID, v.Jobs)
+		if e.wantsCommitDiff(ctx, v) {
+			ctx, cancel := context.WithTimeout(ctx, prefetchTimeout)
+			defer cancel()
+			if files, err := e.gh.CommitFiles(ctx, v.Project.Path, v.SHA); err != nil {
+				e.logEnrich("commit diff", v.Project.Path, err)
+			} else {
+				en.diff = githubDiffStats(files)
 			}
 		}
-		return enrichment{diff: d}
-	case *event.Pipeline:
-		return e.enrichFailedTails(ctx, v.Project, v.ID, v.Jobs)
+		return en
 	case *event.Job:
 		return e.enrichFailedTails(ctx, v.Project, v.PipelineID, []event.Job{*v})
 	}
 	return enrichment{}
+}
+
+// wantsCommitDiff reports whether the pipeline's commit diff stats are
+// still to be fetched: the pipeline names a commit and its stored state
+// holds no stats yet.
+func (e *Engine) wantsCommitDiff(ctx context.Context, v *event.Pipeline) bool {
+	if v.SHA == "" {
+		return false
+	}
+	row, err := e.st.GetObject(ctx, store.Key{Kind: string(cards.KindPipeline), ProjectID: v.Project.ID, ObjectID: v.ID})
+	if err != nil || row == nil {
+		return true
+	}
+	var st cards.PipelineState
+	return unmarshalState(*row, &st) != nil || st.Diff == nil
+}
+
+// githubDiffStats derives stats from the files of a GitHub compare or
+// commit.
+func githubDiffStats(files []github.CompareFile) *cards.DiffStats {
+	d := &cards.DiffStats{FilesChanged: len(files)}
+	for i, f := range files {
+		d.Added += f.Additions
+		d.Removed += f.Deletions
+		if i < cards.MaxDiffFiles {
+			df := cards.DiffFile{Path: f.Filename, New: f.Status == "added", Deleted: f.Status == "removed", Added: f.Additions, Removed: f.Deletions}
+			if f.Status == "renamed" {
+				df.RenamedFrom = f.PreviousFilename
+			}
+			d.Files = append(d.Files, df)
+		}
+	}
+	return d
 }
 
 // enrichThreads fetches an MR's unresolved thread count.
@@ -150,8 +192,8 @@ func (e *Engine) enrichThreads(ctx context.Context, project event.Project, iid i
 	return enrichment{unresolved: n, threads: true}
 }
 
-// diffStats derives stats from forward diffs (an MR's changes, a merge
-// base compare).
+// diffStats derives stats from forward diffs (an MR's changes, a commit's,
+// a merge base compare).
 func diffStats(diffs []api.Diff, partial bool) *cards.DiffStats {
 	d := &cards.DiffStats{FilesChanged: len(diffs), Partial: partial}
 	for i, f := range diffs {
