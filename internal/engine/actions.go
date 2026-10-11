@@ -111,7 +111,7 @@ func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Res
 		if err := e.setConfirmStop(ctx, key, false); err != nil {
 			return actions.Result{}, err
 		}
-		_, err = e.writer.RetryPipeline(ctx, req.ProjectID, req.ObjectID)
+		err = e.retryPipeline(ctx, key)
 		toast = "Retrying pipeline " + id
 	case actions.ActionPlay:
 		_, err = e.writer.PlayJob(ctx, req.ProjectID, req.ObjectID)
@@ -127,6 +127,37 @@ func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Res
 	}
 	e.log.Info("action done", "action", req.Action, "kind", string(req.Kind), "project", req.ProjectID, "object", req.ObjectID, "user", req.TelegramUserID)
 	return actions.Result{Toast: toast}, nil
+}
+
+// retryPipeline retries a failed pipeline. A pipeline retry recreates a
+// failed when: manual job as manual, waiting to be run again, so those
+// jobs are retried one by one (which runs them at once); the pipeline is
+// retried for everything else.
+func (e *Engine) retryPipeline(ctx context.Context, key cards.Key) error {
+	row, err := e.st.GetObject(ctx, skey(key))
+	if err != nil {
+		return err
+	}
+	var st cards.PipelineState
+	if row != nil {
+		if err := unmarshalState(*row, &st); err != nil {
+			return err
+		}
+	}
+	rest := false
+	for _, j := range st.FailedJobs() {
+		if !j.Manual {
+			rest = true
+			continue
+		}
+		if _, err := e.writer.RetryJob(ctx, key.ProjectID, j.ID); err != nil {
+			return err
+		}
+	}
+	if rest || len(st.FailedJobs()) == 0 {
+		_, err = e.writer.RetryPipeline(ctx, key.ProjectID, key.ObjectID)
+	}
+	return err
 }
 
 // setConfirmStop records whether the card is asking to confirm a stop and
