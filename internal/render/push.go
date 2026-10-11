@@ -11,7 +11,7 @@ import (
 
 // Push renders a push card: the title (`@ada pushed to demo (feat/x)`),
 // the force-push warning (the verb links to the compare view), the commits
-// as a quote of `author: title` rows
+// as an always expanded quote of `author: title` rows
 // closed by the line counts in italics, then the pipeline for the pushed
 // head: in full (one line per stage with its time, the failed log, Stop
 // and Retry) when this card absorbs the pipeline the push triggered, as
@@ -38,7 +38,7 @@ func Push(s *cards.PushState, o Options) Message {
 		if d := diffSummary(s.Diff); d != "" {
 			rows = append(rows, "", "<i>"+d+"</i>")
 		}
-		b.Quote(strings.Join(rows, "\n"), len(rows) >= collapseCommitLines)
+		b.Quote(strings.Join(rows, "\n"), false)
 	}
 	var kb [][]Button
 	switch {
@@ -94,11 +94,6 @@ func BranchDeleted(p *event.Push, o Options) Message {
 	taglineFooter(&b, "deleted:"+strconv.FormatInt(p.Project.ID, 10)+":"+p.Branch()+":"+p.Before)
 	return Message{HTML: b.String()}
 }
-
-// collapseCommitLines is the size from which the commits quote starts
-// collapsed: shorter quotes (commit rows, the blank line and the line
-// counts) show in full.
-const collapseCommitLines = 8
 
 // commitList is one `author: title` row per commit the payload carries,
 // then "+N more" (linked to moreURL when set) when the push held more.
