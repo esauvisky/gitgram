@@ -58,8 +58,9 @@ func (e *Engine) applyMR(ctx context.Context, tx *store.Tx, ev *event.MergeReque
 // syncPipelineMRs copies a pipeline's state into the MR cards that show it:
 // every MR whose head pipeline it is, and the MR a merge request pipeline
 // was run for (whose head moves to it when it is newer). It reports whether
-// an MR card absorbs the pipeline: a merge request pipeline shown on its
-// MR's card gets no card of its own.
+// an MR card absorbs the pipeline: a merge request pipeline whose MR card is
+// known gets no card of its own, also once a newer head pipeline replaced
+// it on that card.
 func (e *Engine) syncPipelineMRs(ctx context.Context, tx *store.Tx, key cards.Key, st *cards.PipelineState) (bool, error) {
 	if st.Parent != nil {
 		return false, nil
@@ -107,7 +108,7 @@ func (e *Engine) syncPipelineMRs(ctx context.Context, tx *store.Tx, key cards.Ke
 				return false, err
 			}
 		}
-		if own && mr.Pipeline != nil && mr.Pipeline.ID == st.ID {
+		if own {
 			absorbed = true
 		}
 	}
