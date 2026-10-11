@@ -58,7 +58,18 @@ func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 			return enrichment{}
 		}
 		v.Forced = len(cmp.Commits) > 0
-		return enrichment{diff: diffStatsReversed(cmp)}
+		if !v.Forced {
+			return enrichment{diff: diffStatsReversed(cmp)}
+		}
+		// After a rewrite the straight diff describes before versus after
+		// (nothing at all for a squash of the same tree); the commits
+		// listed are those since the merge base, so their stats are shown.
+		fwd, err := e.api.Compare(ctx, v.Project.ID, v.Before, v.After, false)
+		if err != nil {
+			e.logEnrich("compare", v.Project.Path, err)
+			return enrichment{}
+		}
+		return enrichment{diff: diffStats(fwd.Diffs, fwd.CompareTimeout)}
 	case *event.Pipeline:
 		en := e.enrichFailedTails(ctx, v.Project, v.ID, v.Jobs)
 		if event.IsTerminal(v.Status) {
@@ -74,7 +85,7 @@ func (e *Engine) prefetch(ctx context.Context, ev event.Event) enrichment {
 		if diffs, err := e.api.MRDiffs(ctx, v.Project.ID, v.IID); err != nil {
 			e.logEnrich("diffs", v.Project.Path, err)
 		} else {
-			en.diff = diffStats(diffs)
+			en.diff = diffStats(diffs, false)
 		}
 		return en
 	}
@@ -139,9 +150,10 @@ func (e *Engine) enrichThreads(ctx context.Context, project event.Project, iid i
 	return enrichment{unresolved: n, threads: true}
 }
 
-// diffStats derives stats from forward diffs (an MR's changes).
-func diffStats(diffs []api.Diff) *cards.DiffStats {
-	d := &cards.DiffStats{FilesChanged: len(diffs)}
+// diffStats derives stats from forward diffs (an MR's changes, a merge
+// base compare).
+func diffStats(diffs []api.Diff, partial bool) *cards.DiffStats {
+	d := &cards.DiffStats{FilesChanged: len(diffs), Partial: partial}
 	for i, f := range diffs {
 		a, r := f.LineCounts()
 		d.Added += a
