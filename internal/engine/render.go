@@ -36,6 +36,12 @@ func (e *Engine) Render(kind string, stateJSON []byte, _ *int64) (telegram.Messa
 			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
 		}
 		msg = render.Push(&s, e.options(s.Project))
+	case cards.KindPackage:
+		var s cards.PackageState
+		if err := json.Unmarshal(stateJSON, &s); err != nil {
+			return telegram.Message{}, fmt.Errorf("decode %s state: %w", kind, err)
+		}
+		msg = render.Package(&s, e.options(s.Project))
 	default:
 		return telegram.Message{}, fmt.Errorf("render: unknown card kind %q", kind)
 	}

@@ -2,7 +2,8 @@
 // talks to the GitHub REST API. Pushes become push events, Actions
 // workflow runs and jobs become pipeline and job events (each job its own
 // stage), and pull requests become merge request events, so the engine
-// and the cards treat both hosts alike.
+// and the cards treat both hosts alike. Tagged container images published
+// to GHCR become package events.
 //
 // GitHub repositories are stored with negative project ids (minus the
 // repository id), so they never collide with GitLab projects in the
@@ -20,6 +21,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -106,6 +108,8 @@ func Parse(kind string, body []byte, received time.Time) (event.Event, error) {
 		return parseJob(body, meta)
 	case "pull_request":
 		return parsePullRequest(body, meta)
+	case "registry_package":
+		return parsePackage(body, meta)
 	}
 	return nil, fmt.Errorf("%w: %q", ErrIgnored, kind)
 }
@@ -375,4 +379,61 @@ func parsePullRequest(body []byte, meta event.Meta) (event.Event, error) {
 		m.DetailedMergeStatus = pr.MergeableState
 	}
 	return m, nil
+}
+
+type rawPackage struct {
+	Package struct {
+		Name        string `json:"name"`
+		Namespace   string `json:"namespace"`
+		PackageType string `json:"package_type"`
+		Version     struct {
+			ID                int64   `json:"id"`
+			Version           string  `json:"version"`
+			HTMLURL           string  `json:"html_url"`
+			Author            rawUser `json:"author"`
+			ContainerMetadata struct {
+				Tag struct {
+					Name string `json:"name"`
+				} `json:"tag"`
+			} `json:"container_metadata"`
+		} `json:"package_version"`
+		Registry struct {
+			URL string `json:"url"`
+		} `json:"registry"`
+	} `json:"registry_package"`
+	// Repo is nil for a package not linked to a repository.
+	Repo   *rawRepo `json:"repository"`
+	Sender rawUser  `json:"sender"`
+}
+
+// parsePackage decodes a registry_package delivery. A GHCR image version is
+// a digest and its tag is what was published; a multi-arch push also
+// publishes one untagged version per platform manifest, which would only
+// repeat the tagged index, so untagged images are ignored.
+func parsePackage(body []byte, meta event.Meta) (event.Event, error) {
+	var raw rawPackage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, fmt.Errorf("github: decode registry_package: %w", err)
+	}
+	pkg, v := raw.Package, raw.Package.Version
+	if raw.Repo == nil {
+		return nil, fmt.Errorf("%w: package %q is not linked to a repository", ErrIgnored, pkg.Name)
+	}
+	p := &event.Package{Meta: meta, Project: raw.Repo.event(), User: v.Author.event(), Type: strings.ToLower(pkg.PackageType),
+		Name: pkg.Name, Namespace: pkg.Namespace, VersionID: v.ID, Version: v.Version, URL: v.HTMLURL}
+	switch p.Type {
+	case event.PackageContainer:
+		p.Version = v.ContainerMetadata.Tag.Name
+		if p.Version == "" {
+			return nil, fmt.Errorf("%w: untagged version of %q", ErrIgnored, pkg.Name)
+		}
+		fallthrough
+	case event.PackageDocker:
+		reg, err := url.Parse(pkg.Registry.URL)
+		if err != nil {
+			return nil, fmt.Errorf("github: registry url of %q: %w", pkg.Name, err)
+		}
+		p.Image = strings.ToLower(reg.Host + reg.Path)
+	}
+	return p, nil
 }

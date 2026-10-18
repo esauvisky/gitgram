@@ -10,7 +10,7 @@ import "time"
 
 // Event is implemented by every normalized event type in this package
 // (*Push, *TagPush, *Pipeline, *Job, *MergeRequest, *Note, *Issue, *Release,
-// *Deployment).
+// *Deployment, *Package).
 type Event interface {
 	// EventKind identifies the concrete event type.
 	EventKind() Kind

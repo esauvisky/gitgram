@@ -32,11 +32,12 @@ const (
 	KindPipeline Kind = "pipeline"
 	KindPush     Kind = "push"
 	KindMR       Kind = "mr"
+	KindPackage  Kind = "package"
 )
 
 // Key identifies one object_state row and therefore one card. ObjectID is
-// the pipeline id for pipelines, the iid for merge requests and issues, and
-// PushObjectID for pushes.
+// the pipeline id for pipelines, the iid for merge requests and issues,
+// PushObjectID for pushes and the registry's version id for packages.
 type Key struct {
 	Kind      Kind
 	ProjectID int64

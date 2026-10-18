@@ -10,10 +10,11 @@ const (
 	KindPipeline     Kind = "pipeline"
 	KindJob          Kind = "job"
 	KindMergeRequest Kind = "merge_request"
+	KindPackage      Kind = "package"
 )
 
 // Kinds lists every kind in a stable order.
-var Kinds = []Kind{KindPush, KindPipeline, KindJob, KindMergeRequest}
+var Kinds = []Kind{KindPush, KindPipeline, KindJob, KindMergeRequest, KindPackage}
 
 // String returns the kind as a string.
 func (k Kind) String() string { return string(k) }

@@ -3,6 +3,7 @@ package preview
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/esauvisky/gitgram/internal/cards"
@@ -304,6 +305,28 @@ var scenarios = []Scenario{
 			return r.handle(ctx, p)
 		},
 	}},
+	{Name: "package", About: "a Docker image published as v1.4.0, then tagged latest, and an npm package", Steps: []Step{
+		func(ctx context.Context, r *Runner) error {
+			return r.handle(ctx, r.pkg(event.PackageContainer, 992001, "v1.4.0"))
+		},
+		func(ctx context.Context, r *Runner) error {
+			return r.handle(ctx, r.pkg(event.PackageContainer, 992001, "latest"))
+		},
+		func(ctx context.Context, r *Runner) error {
+			return r.handle(ctx, r.pkg(event.PackageNPM, 992002, "1.4.0"))
+		},
+	}},
+}
+
+// pkg is a publication of the demo package's version id under version.
+func (r *Runner) pkg(typ string, id int64, version string) *event.Package {
+	owner, _, _ := strings.Cut(r.proj.Path, "/")
+	p := &event.Package{Meta: meta(), Project: r.proj, User: ada, Type: typ, Name: "demo", Namespace: owner,
+		VersionID: id, Version: version, URL: r.proj.WebURL + "/pkgs/" + typ + "/demo"}
+	if p.IsImage() {
+		p.Image = "ghcr.io/" + strings.ToLower(r.proj.Path)
+	}
+	return p
 }
 
 func itoa(i int64) string {

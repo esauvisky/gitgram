@@ -8,7 +8,7 @@
 
 ---
 
-Gitgram is a self-hosted bot that takes every project under a GitLab group, every repository of your GitHub organizations and accounts, or both at once, and turns their webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. It covers pushes, pipelines and merge requests on GitLab, and pushes, Actions workflow runs and pull requests on GitHub; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
+Gitgram is a self-hosted bot that takes every project under a GitLab group, every repository of your GitHub organizations and accounts, or both at once, and turns their webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. It covers pushes, pipelines and merge requests on GitLab, and pushes, Actions workflow runs, pull requests and published packages on GitHub; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
 
 <p align="center">
   <img src="assets/preview.gif" width="440" alt="The /preview command in a Telegram group: push, force-push and merge request cards appear and edit themselves as their mock pipelines run, pass and fail">
@@ -58,9 +58,9 @@ One token with `api` covers both. A group access token works too.
 Set `GITGRAM_GITHUB_OWNER` to the users or organizations whose repositories are accepted (comma-separated), and `GITGRAM_GITHUB_WEBHOOK_SECRET` to the webhook secret. Then add a webhook on each organization, and on each repository of a user account (users have no account-wide webhooks):
 
 - Payload URL `<GITGRAM_PUBLIC_URL>/webhook/github`, content type `application/json`, the same secret.
-- Events: Pushes, Workflow runs, Workflow jobs, Pull requests.
+- Events: Pushes, Workflow runs, Workflow jobs, Pull requests, Registry packages.
 
-`GITGRAM_GITHUB_TOKEN` is optional. A fine-grained token with Contents read and Actions read/write on those repositories adds push diff stats, failure logs, and the Stop and Retry buttons on workflow runs. GitHub cards follow the GitLab layout: a workflow run is a pipeline card with one line per job, a pull request is a merge request card. They have no Merge or Run buttons, no artifacts and no thread counts, and the reconciler does not re-read them. A push that starts several workflows shows the first one on the push card and the others as their own cards. With only GitHub configured, `GITGRAM_GITLAB_GROUP` and `GITGRAM_WEBHOOK_SECRET` can be left empty.
+`GITGRAM_GITHUB_TOKEN` is optional. A fine-grained token with Contents read and Actions read/write on those repositories adds push diff stats, failure logs, and the Stop and Retry buttons on workflow runs. GitHub cards follow the GitLab layout: a workflow run is a pipeline card with one line per job, a pull request is a merge request card. They have no Merge or Run buttons, no artifacts and no thread counts, and the reconciler does not re-read them. A push that starts several workflows shows the first one on the push card and the others as their own cards. A published package (Docker image, npm, Maven, RubyGems, NuGet) gets one card per version with its install command; an image's card collects every tag pushed to the same digest. Untagged per-platform image manifests and packages not linked to a repository are ignored. With only GitHub configured, `GITGRAM_GITLAB_GROUP` and `GITGRAM_WEBHOOK_SECRET` can be left empty.
 
 ### 3. Run
 
@@ -126,7 +126,7 @@ GitHub: `POST <GITGRAM_PUBLIC_URL>/webhook/github`, set up by hand as described 
 
 ## Preview
 
-`gitgram preview` sends a mock card of every kind and scenario to `GITGRAM_DEBUG_CHAT_ID` (or, without one, to every `GITGRAM_CHAT_ID` chat): pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, a passing and a manual pipeline, and a merge request opened → merged plus a closed draft. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab or GitHub, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
+`gitgram preview` sends a mock card of every kind and scenario to `GITGRAM_DEBUG_CHAT_ID` (or, without one, to every `GITGRAM_CHAT_ID` chat): pushes, branches, a pipeline going pending → running → failed with log tails and artifacts, a passing and a manual pipeline, a merge request opened → merged plus a closed draft, and a Docker image picking up a second tag next to an npm package. Cards go through the real engine and sender, so first sends, in-place edits and folding behave as in production. State lives in a temporary database, nothing touches GitLab or GitHub, and Telegram is never polled, so it runs beside a live `serve`: `docker compose exec gitgram /gitgram preview`. Pick scenarios with `--scenario push,pipeline` and pace them with `--delay 4s`. The same thing is one message away in the group: `/preview`, or `/preview push pipeline`.
 
 ## Not supported yet
 
