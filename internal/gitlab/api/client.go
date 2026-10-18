@@ -1,6 +1,7 @@
 // Package api is a hand-written client for the subset of the GitLab REST API
 // (v4) that Gitgram uses: enrichment reads (compare, approvals, discussions,
-// merge request and pipeline detail, group projects) and webhook CRUD for
+// merge request and pipeline detail, group projects, package and container
+// registries) and webhook CRUD for
 // the sync-hooks subcommand.
 package api
 

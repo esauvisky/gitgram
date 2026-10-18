@@ -8,7 +8,7 @@
 
 ---
 
-Gitgram is a self-hosted bot that takes every project under a GitLab group, every repository of your GitHub organizations and accounts, or both at once, and turns their webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. It covers pushes, pipelines and merge requests on GitLab, and pushes, Actions workflow runs, pull requests and published packages on GitHub; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
+Gitgram is a self-hosted bot that takes every project under a GitLab group, every repository of your GitHub organizations and accounts, or both at once, and turns their webhooks into Telegram messages that stay useful. A pipeline is **one message** that updates as jobs run, and a push is **one message** that carries its commits and the pipeline it triggered, so the group chat reads like a timeline instead of a log file. It covers pushes, pipelines, merge requests and published packages on GitLab, and pushes, Actions workflow runs, pull requests and published packages on GitHub; the other GitLab events are listed under [Not supported yet](#not-supported-yet).
 
 <p align="center">
   <img src="assets/preview.gif" width="440" alt="The /preview command in a Telegram group: push, force-push and merge request cards appear and edit themselves as their mock pipelines run, pass and fail">
@@ -47,7 +47,7 @@ Single static Go binary. SQLite. No cgo. Runs happily in a 20 MB distroless cont
 
 | Token | Scope | Used for | Required |
 |---|---|---|---|
-| `GITGRAM_GITLAB_TOKEN` | `read_api` | diff stats, failure logs, artifacts, force-push detection, reconciler | no, features degrade gracefully |
+| `GITGRAM_GITLAB_TOKEN` | `read_api` | diff stats, failure logs, artifacts, force-push detection, reconciler, package cards | no, features degrade gracefully |
 | `GITGRAM_GITLAB_HOOKS_TOKEN` | `api` | `gitgram sync-hooks` and the Stop, Retry and Run buttons | only for sync-hooks and buttons |
 | `GITGRAM_WEBHOOK_SECRET` | any string | `X-Gitlab-Token` on each delivery | yes |
 
@@ -112,6 +112,8 @@ Everything comes from `GITGRAM_*` environment variables; under Docker Compose th
 - **Premium/Ultimate**: `gitgram sync-hooks --group-hook` registers a single group webhook. Don't do both; every event arrives twice and you get to pay for deduplicating it.
 
 Endpoint: `POST <GITGRAM_PUBLIC_URL>/webhook/gitlab`. Events to enable: Push, Job, Pipeline, Merge request. Other events are accepted and ignored.
+
+GitLab has no webhook for the package or container registry, so with `GITGRAM_GITLAB_TOKEN` set the bot polls the group's registries every 5 minutes and posts what was published since, one card per package version or image digest. The first poll after the database is created only records what already exists. GitLab images record no publisher and most CI-uploaded packages none either; those cards say "Someone".
 
 GitHub: `POST <GITGRAM_PUBLIC_URL>/webhook/github`, set up by hand as described in [GitHub](#2b-github-optional). `sync-hooks` is GitLab only.
 

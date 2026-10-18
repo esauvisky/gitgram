@@ -16,7 +16,6 @@ type PackageState struct {
 	Publisher event.User
 	Type      string
 	Name      string
-	Namespace string
 	Image     string
 	URL       string
 	// Versions are the image's tags in arrival order, without duplicates;
@@ -40,7 +39,6 @@ func ReducePackage(s *PackageState, ev *event.Package) (changed bool) {
 	s.Publisher = ev.User
 	s.Type = ev.Type
 	s.Name = ev.Name
-	s.Namespace = ev.Namespace
 	s.Image = ev.Image
 	s.URL = ev.URL
 	if !slices.Contains(s.Versions, ev.Version) {

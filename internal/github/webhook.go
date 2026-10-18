@@ -420,8 +420,10 @@ func parsePackage(body []byte, meta event.Meta) (event.Event, error) {
 		return nil, fmt.Errorf("%w: package %q is not linked to a repository", ErrIgnored, pkg.Name)
 	}
 	p := &event.Package{Meta: meta, Project: raw.Repo.event(), User: v.Author.event(), Type: strings.ToLower(pkg.PackageType),
-		Name: pkg.Name, Namespace: pkg.Namespace, VersionID: v.ID, Version: v.Version, URL: v.HTMLURL}
+		Name: pkg.Name, VersionID: v.ID, Version: v.Version, URL: v.HTMLURL}
 	switch p.Type {
+	case event.PackageNPM:
+		p.Name = "@" + strings.ToLower(pkg.Namespace) + "/" + pkg.Name
 	case event.PackageContainer:
 		p.Version = v.ContainerMetadata.Tag.Name
 		if p.Version == "" {

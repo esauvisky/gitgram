@@ -29,6 +29,17 @@ type Reader interface {
 	// GroupProjects lists every non-archived project under group (path or id),
 	// subgroups included, excluding projects merely shared with the group.
 	GroupProjects(ctx context.Context, group string) ([]Project, error)
+	// GroupPackagesSince lists the package versions under group newer than
+	// afterID, newest first.
+	GroupPackagesSince(ctx context.Context, group string, afterID int64) ([]Package, error)
+	// GroupRegistryRepositories lists every container image under group.
+	GroupRegistryRepositories(ctx context.Context, group string) ([]RegistryRepository, error)
+	// RegistryTags lists an image's tags, names only.
+	RegistryTags(ctx context.Context, projectID, repoID int64) ([]RegistryTag, error)
+	// RegistryTagDetail reads one tag with its digest.
+	RegistryTagDetail(ctx context.Context, projectID, repoID int64, tag string) (*RegistryTag, error)
+	// User is GET /users/:id.
+	User(ctx context.Context, id int64) (*User, error)
 }
 
 var _ Reader = (*Client)(nil)

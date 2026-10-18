@@ -25,6 +25,7 @@ import (
 const (
 	maxWebhookBody    = 8 << 20
 	reconcileInterval = 5 * time.Minute
+	registryInterval  = 5 * time.Minute
 	janitorInterval   = time.Hour
 	shutdownTimeout   = 30 * time.Second
 	healthTimeout     = 2 * time.Second
@@ -174,6 +175,7 @@ func runServe(ctx context.Context, args []string) error {
 	}()
 	go eng.RunReconciler(runCtx, reconcileInterval)
 	go eng.RunJanitor(runCtx, janitorInterval)
+	go eng.RunRegistryWatch(runCtx, registryInterval)
 
 	errc := make(chan error, 1)
 	go func() {
