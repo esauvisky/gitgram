@@ -63,19 +63,22 @@ func Pipeline(s *cards.PipelineState, o Options) Message {
 }
 
 // pipelineBody writes, after a blank line, one line per stage in every
-// state of the pipeline:
-// mark, linked name, state, time once finished, and the failed job's log
-// right under a failed stage. Downstream pipelines follow.
+// state of the pipeline (mark, linked name, time once finished) and, under
+// each, one small line per job with a failed job's log right under its
+// line. Downstream pipelines follow.
 func pipelineBody(s *cards.PipelineState, v *pipelineView, b *htmlfmt.Builder) {
 	stages := groupStages(v.jobs)
 	if len(stages) > 0 {
 		b.Line("")
 	}
 	for _, st := range stages {
-		line, logJob := stageLine(st)
-		b.Line(line + stageArtifacts(s, st))
-		if t, ok := s.Tails[logJob]; ok && logJob != 0 && len(t.Lines) > 0 {
-			b.Line(htmlfmt.Pre(strings.Join(t.Lines, "\n"), "log"))
+		b.Line(stageLine(st) + stageArtifacts(s, st))
+		timed := stageDuration(st.jobs) != ""
+		for _, j := range st.jobs {
+			small(b, jobIndent+jobLine(j, timed))
+			if t, ok := s.Tails[j.ID]; ok && j.Status == event.StatusFailed && !j.AllowFailure && len(t.Lines) > 0 {
+				b.Line(htmlfmt.Pre(strings.Join(t.Lines, "\n"), "log"))
+			}
 		}
 	}
 	if len(s.Children) > 0 {
@@ -206,61 +209,99 @@ func stageMark(state string) string {
 }
 
 // stageLine is one stage: its mark and bold name, linked to the job worth
-// opening (running, else failed, else the first), then what it is doing:
-// `running job x...`, `x failed`, `waiting for x`, `waiting...`, and how
-// long it took once it finished. logJob is the hard-failed job whose log
-// belongs under the line, 0 for none: logs show only on failure.
-func stageLine(st stageGroup) (line string, logJob int64) {
-	var running, failed, manual []cards.JobState
-	for _, j := range st.jobs {
-		switch {
-		case j.Status == event.StatusRunning || j.Status == event.StatusCanceling:
-			running = append(running, j)
-		case j.Status == event.StatusFailed && !j.AllowFailure:
-			failed = append(failed, j)
-		case j.Status == event.StatusManual:
-			manual = append(manual, j)
-		}
-	}
+// opening (running, else failed, else the first), and how long it took
+// once every job in it finished. What the jobs are doing is on their own
+// lines below.
+func stageLine(st stageGroup) string {
 	target := st.jobs[0]
-	switch {
-	case len(running) > 0:
-		target = running[0]
-	case len(failed) > 0:
-		target = failed[0]
+	for _, j := range st.jobs {
+		if j.Status == event.StatusRunning || j.Status == event.StatusCanceling {
+			target = j
+			break
+		}
+		if j.Status == event.StatusFailed && !j.AllowFailure && target.Status != event.StatusFailed {
+			target = j
+		}
 	}
 	name := htmlfmt.Esc(sentence(st.name))
 	if target.URL != "" {
 		name = htmlfmt.A(sentence(st.name), target.URL)
 	}
-	state := stageState(st.jobs)
-	l := stageMark(state) + " <b>" + name + "</b>"
-	switch {
-	case len(running) > 0:
-		word := "job"
-		if len(running) > 1 {
-			word = "jobs"
-		}
-		l += ": running " + word + " " + jobNames(running) + "..."
-	case len(failed) > 0:
-		l += ": " + jobNames(failed) + " failed"
-		if r := failureReason(failed[0]); r != "" {
-			l += " (" + htmlfmt.Esc(r) + ")"
-		}
-		logJob = failed[0].ID
-	case len(manual) > 0:
-		l += ": waiting for " + jobNames(manual)
-	case state == "queued":
-		l += ": waiting..."
-	case state == "skipped", state == "canceled", state == "scheduled":
-		l += ": " + state
-	case state == "warned":
-		l += ": passed with warnings"
-	}
+	l := stageMark(stageState(st.jobs)) + " <b>" + name + "</b>"
 	if d := stageDuration(st.jobs); d != "" {
 		l += " · " + d
 	}
-	return l, logJob
+	return l
+}
+
+// jobIndent sets a job line in from its stage.
+const jobIndent = "   - "
+
+// jobLine is one job under its stage, in the small voice: its name as a
+// chip, struck through once the job is done, its state in a word
+// (`running...`, `queued`, `manual`, `failed (stuck or timeout failure)`)
+// and, once the whole stage finished, how long it ran.
+func jobLine(j cards.JobState, timed bool) string {
+	name := htmlfmt.Code(j.Name)
+	if j.URL != "" {
+		name = `<a href="` + htmlfmt.Esc(j.URL) + `">` + name + "</a>"
+	}
+	if event.IsTerminal(j.Status) {
+		name = "<s>" + name + "</s>"
+	}
+	l := name + " " + jobWord(j)
+	if d := jobDuration(j); timed && d != "" {
+		l += " · " + d
+	}
+	return l
+}
+
+// jobWord is a job's state as one lowercase word, with the failure reason
+// when GitLab gives one.
+func jobWord(j cards.JobState) string {
+	switch j.Status {
+	case event.StatusSuccess:
+		return "passed"
+	case event.StatusFailed:
+		var notes []string
+		if j.AllowFailure {
+			notes = append(notes, "allowed")
+		}
+		if r := failureReason(j); r != "" {
+			notes = append(notes, r)
+		}
+		if len(notes) == 0 {
+			return "failed"
+		}
+		return "failed (" + htmlfmt.Esc(strings.Join(notes, ", ")) + ")"
+	case event.StatusRunning:
+		return "running..."
+	case event.StatusCanceling:
+		return "canceling..."
+	case event.StatusCanceled:
+		return "canceled"
+	case event.StatusSkipped:
+		return "skipped"
+	case event.StatusManual:
+		return "manual"
+	case event.StatusScheduled:
+		return "scheduled"
+	case event.StatusCreated, event.StatusPending, event.StatusWaitingForResource, event.StatusPreparing, event.StatusWaitingForCallback:
+		return "queued"
+	}
+	return htmlfmt.Esc(humanize(j.Status))
+}
+
+// jobDuration is how long a job ran, from its reported duration or its
+// start and finish; empty when it never ran.
+func jobDuration(j cards.JobState) string {
+	switch {
+	case j.Duration != nil && *j.Duration > 0:
+		return htmlfmt.Dur(*j.Duration)
+	case j.StartedAt != nil && j.FinishedAt != nil:
+		return htmlfmt.Dur(j.FinishedAt.Sub(*j.StartedAt).Seconds())
+	}
+	return ""
 }
 
 // stageDuration is the stage's wall time, first start to last finish, once
@@ -283,15 +324,6 @@ func stageDuration(jobs []cards.JobState) string {
 		return ""
 	}
 	return htmlfmt.Dur(last.Sub(*first).Seconds())
-}
-
-// jobNames lists jobs as code chips.
-func jobNames(jobs []cards.JobState) string {
-	names := make([]string, len(jobs))
-	for i, j := range jobs {
-		names[i] = htmlfmt.Code(j.Name)
-	}
-	return strings.Join(names, ", ")
 }
 
 // failureReason is GitLab's reason when it says something; script_failure
