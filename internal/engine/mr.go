@@ -2,18 +2,31 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/esauvisky/gitgram/internal/cards"
 	"github.com/esauvisky/gitgram/internal/event"
+	"github.com/esauvisky/gitgram/internal/render"
 	"github.com/esauvisky/gitgram/internal/store"
+)
+
+// An MR merged or closed while its card is older than finishedNoticeAge, or
+// has more than finishedNoticeCards cards posted below it, also gets a
+// standalone notice so the outcome is seen.
+const (
+	finishedNoticeAge   = 24 * time.Hour
+	finishedNoticeCards = 2
 )
 
 // applyMR folds a Merge Request Hook into the MR state, applies the
 // prefetched thread count and diff stats, links the head pipeline named by
 // the payload (adopting its state when the pipeline is already known) and
-// enqueues the card.
+// enqueues the card. A merge or close of an MR whose card sits far up the
+// chat also posts a standalone notice.
 func (e *Engine) applyMR(ctx context.Context, tx *store.Tx, ev *event.MergeRequest, en enrichment) error {
 	key := cards.Key{Kind: cards.KindMR, ProjectID: ev.Project.ID, ObjectID: ev.IID}
 	st, row, err := load[cards.MRState](ctx, tx, key, e.log)
@@ -21,6 +34,7 @@ func (e *Engine) applyMR(ctx context.Context, tx *store.Tx, ev *event.MergeReque
 		return err
 	}
 	changed := cards.ReduceMR(st, ev)
+	finished := changed && (ev.Action == event.MRActionMerge || ev.Action == event.MRActionClose)
 	if en.threads && st.SetThreads(en.unresolved) {
 		changed = true
 	}
@@ -52,7 +66,33 @@ func (e *Engine) applyMR(ctx context.Context, tx *store.Tx, ev *event.MergeReque
 	if !changed && card != nil {
 		return nil
 	}
-	return e.enqueueCard(ctx, tx, key, card, st.Final)
+	if err := e.enqueueCard(ctx, tx, key, card, st.Final); err != nil {
+		return err
+	}
+	if !finished || card == nil || card.MessageID == nil {
+		return nil
+	}
+	return e.noticeMRFinished(ctx, tx, st, card)
+}
+
+// noticeMRFinished posts the merge or close of st as a standalone message
+// when its card is older than finishedNoticeAge or buried under more than
+// finishedNoticeCards cards.
+func (e *Engine) noticeMRFinished(ctx context.Context, tx *store.Tx, st *cards.MRState, card *store.CardRow) error {
+	if time.Since(card.CreatedAt) <= finishedNoticeAge {
+		below, err := tx.CountCardsAfter(ctx, *card.MessageID)
+		if err != nil {
+			return err
+		}
+		if below <= finishedNoticeCards {
+			return nil
+		}
+	}
+	payload, err := json.Marshal(render.MRFinished(st, e.options(st.Project)))
+	if err != nil {
+		return fmt.Errorf("encode mr notice: %w", err)
+	}
+	return tx.EnqueueSend(ctx, card.ThreadID, payload)
 }
 
 // syncPipelineMRs copies a pipeline's state into the MR cards that show it:

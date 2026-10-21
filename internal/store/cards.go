@@ -99,3 +99,15 @@ func nullInt(p *int64) sql.NullInt64 {
 	}
 	return sql.NullInt64{Int64: *p, Valid: true}
 }
+
+// CountCardsAfter counts the cards posted in the primary chat after the
+// message messageID.
+func (q queries) CountCardsAfter(ctx context.Context, messageID int64) (int, error) {
+	var n int
+	if err := q.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM card_messages WHERE message_id > ?`, messageID,
+	).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count cards after %d: %w", messageID, err)
+	}
+	return n, nil
+}

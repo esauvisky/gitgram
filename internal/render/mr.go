@@ -111,3 +111,23 @@ func mergeButtons(s *cards.MRState, o Options) []Button {
 	}
 	return button("Merge", actions.ActionMerge)
 }
+
+// MRFinished is the standalone notice for a merge request that was merged
+// or closed while its card sat far up the chat: `@linus merged a MR in demo
+// (feat/x → develop)` and the MR title, linked.
+func MRFinished(s *cards.MRState, o Options) Message {
+	var b htmlfmt.Builder
+	verb, by := "closed", s.ClosedBy
+	if s.State == event.MRStateMerged {
+		verb, by = "merged", s.MergedBy
+	}
+	headline(&b, o.who(*by)+" "+verb+" a "+projectPage("MR", s.Project, "/-/merge_requests"), "in", s.Project,
+		branchRef(s.Project, s.SourceBranch)+" → "+branchRef(s.Project, s.TargetBranch))
+	title := htmlfmt.Esc(s.Title)
+	if s.URL != "" {
+		title = htmlfmt.A(s.Title, s.URL)
+	}
+	b.Line("<b>" + title + "</b>")
+	taglineFooter(&b, "mr-"+verb+":"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.IID, 10))
+	return Message{HTML: b.String()}
+}
