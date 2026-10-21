@@ -1,7 +1,6 @@
 package render
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/esauvisky/gitgram/internal/actions"
@@ -89,7 +88,6 @@ func MergeRequest(s *cards.MRState, o Options) Message {
 	if s.SourceBranchDeleted {
 		small(&b, "The branch "+htmlfmt.Code(s.SourceBranch)+" was deleted.")
 	}
-	taglineFooter(&b, "mr:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.IID, 10))
 	return Message{HTML: b.Truncate(o.limit(), s.URL), Keyboard: kb}
 }
 
@@ -128,6 +126,5 @@ func MRFinished(s *cards.MRState, o Options) Message {
 		title = htmlfmt.A(s.Title, s.URL)
 	}
 	b.Line("<b>" + title + "</b>")
-	taglineFooter(&b, "mr-"+verb+":"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.IID, 10))
 	return Message{HTML: b.String()}
 }

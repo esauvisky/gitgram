@@ -50,7 +50,6 @@ func Push(s *cards.PushState, o Options) Message {
 		sum := s.Pipeline.PipelineSummary()
 		small(&b, pipelineLine(&sum))
 	}
-	taglineFooter(&b, "push:"+strconv.FormatInt(s.Project.ID, 10)+":"+s.Branch+":"+s.After)
 	return Message{HTML: b.Truncate(o.limit(), pushMoreURL(s)), Keyboard: kb}
 }
 
@@ -91,7 +90,6 @@ func diffSummary(df *cards.DiffStats) string {
 func BranchDeleted(p *event.Push, o Options) Message {
 	var b htmlfmt.Builder
 	headline(&b, o.who(p.User)+" deleted a branch", "in", p.Project, htmlfmt.Code(p.Branch()))
-	taglineFooter(&b, "deleted:"+strconv.FormatInt(p.Project.ID, 10)+":"+p.Branch()+":"+p.Before)
 	return Message{HTML: b.String()}
 }
 

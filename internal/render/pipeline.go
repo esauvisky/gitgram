@@ -59,7 +59,6 @@ func Pipeline(s *cards.PipelineState, o Options) Message {
 		b.Quote(strings.Join(rows, "\n"), false)
 	}
 	pipelineBody(s, v, &b)
-	taglineFooter(&b, "pipeline:"+strconv.FormatInt(s.Project.ID, 10)+":"+strconv.FormatInt(s.ID, 10))
 	return Message{HTML: b.Truncate(o.limit(), s.URL), Keyboard: pipelineKeyboard(s, v, o)}
 }
 

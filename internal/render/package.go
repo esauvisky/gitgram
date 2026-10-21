@@ -1,8 +1,6 @@
 package render
 
 import (
-	"strconv"
-
 	"github.com/esauvisky/gitgram/internal/cards"
 	"github.com/esauvisky/gitgram/internal/event"
 	"github.com/esauvisky/gitgram/internal/render/htmlfmt"
@@ -27,7 +25,6 @@ func Package(s *cards.PackageState, o Options) Message {
 	for _, v := range s.Versions {
 		b.Line(htmlfmt.Code(versionRef(s, v)))
 	}
-	taglineFooter(&b, "package:"+strconv.FormatInt(s.Project.ID, 10)+":"+s.URL)
 	return Message{HTML: b.Truncate(o.limit(), s.URL)}
 }
 
