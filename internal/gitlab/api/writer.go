@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 // Writer is the write surface behind the card buttons. It needs an api
@@ -15,6 +16,9 @@ type Writer interface {
 	RetryPipeline(ctx context.Context, projectID, id int64) (*Pipeline, error)
 	// RetryJob is POST /projects/:id/jobs/:job_id/retry.
 	RetryJob(ctx context.Context, projectID, jobID int64) (*Job, error)
+	// ForceCancelJob is POST /projects/:id/jobs/:job_id/cancel?force=true:
+	// it ends a job stuck in canceling.
+	ForceCancelJob(ctx context.Context, projectID, jobID int64) (*Job, error)
 	// PlayJob is POST /projects/:id/jobs/:job_id/play.
 	PlayJob(ctx context.Context, projectID, jobID int64) (*Job, error)
 	// MergeMR is PUT /projects/:id/merge_requests/:iid/merge.
@@ -45,6 +49,15 @@ func (c *Client) RetryPipeline(ctx context.Context, projectID, id int64) (*Pipel
 func (c *Client) RetryJob(ctx context.Context, projectID, jobID int64) (*Job, error) {
 	var out Job
 	if _, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/projects/%d/jobs/%d/retry", projectID, jobID), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ForceCancelJob implements Writer.
+func (c *Client) ForceCancelJob(ctx context.Context, projectID, jobID int64) (*Job, error) {
+	var out Job
+	if _, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/projects/%d/jobs/%d/cancel", projectID, jobID), url.Values{"force": {"true"}}, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -104,6 +104,13 @@ func (c *Client) CancelRun(ctx context.Context, repo string, runID int64) error 
 	return err
 }
 
+// ForceCancelRun is POST /repos/:repo/actions/runs/:id/force-cancel: it
+// ends a run whose cancel is held up by always() jobs.
+func (c *Client) ForceCancelRun(ctx context.Context, repo string, runID int64) error {
+	_, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/actions/runs/%d/force-cancel", repo, runID), nil)
+	return err
+}
+
 // RerunFailed is POST /repos/:repo/actions/runs/:id/rerun-failed-jobs.
 func (c *Client) RerunFailed(ctx context.Context, repo string, runID int64) error {
 	_, err := c.do(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/actions/runs/%d/rerun-failed-jobs", repo, runID), nil)

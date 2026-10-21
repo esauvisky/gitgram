@@ -39,7 +39,10 @@ const (
 	ActionCancel    Action = "cancel"
 	ActionCancelYes Action = "cancelyes"
 	ActionCancelNo  Action = "cancelno"
-	ActionRetry     Action = "retry"
+	// ActionCancelForce force-stops a pipeline whose jobs are still
+	// canceling (running their after_script).
+	ActionCancelForce Action = "cancelforce"
+	ActionRetry       Action = "retry"
 	// ActionPlay starts a manual job (KindJob, ObjectID is the job id).
 	ActionPlay    Action = "play"
 	ActionApprove Action = "approve"

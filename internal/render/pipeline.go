@@ -362,7 +362,8 @@ func hardFailures(jobs []cards.JobState) []cards.JobState {
 // pipelineKeyboard is the card's buttons: `Run <job>` for each manual job
 // waiting to be started (up to maxRunButtons), then `Stop pipeline` while
 // the pipeline is active, swapped for `Yes, stop it` and `Keep running`
-// once someone pressed it; `Retry` once it failed.
+// once someone pressed it, `Force stop` while its jobs are canceling;
+// `Retry` once it failed.
 // Each needs the bot to be able to write to GitLab.
 func pipelineKeyboard(s *cards.PipelineState, v *pipelineView, o Options) [][]Button {
 	base := actions.Callback{Kind: actions.KindPipeline, ProjectID: s.Project.ID, ObjectID: s.ID}
@@ -392,6 +393,8 @@ func pipelineKeyboard(s *cards.PipelineState, v *pipelineView, o Options) [][]Bu
 	}
 	var row []Button
 	switch {
+	case v.status == event.StatusCanceling && o.can(actions.KindPipeline, actions.ActionCancelForce):
+		row = button("Force stop", actions.ActionCancelForce)
 	case event.IsActive(v.status) && o.can(actions.KindPipeline, actions.ActionCancel):
 		if s.ConfirmStop {
 			row = append(button("Yes, stop it", actions.ActionCancelYes), button("Keep running", actions.ActionCancelNo)...)

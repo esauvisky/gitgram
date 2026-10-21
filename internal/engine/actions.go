@@ -8,6 +8,7 @@ import (
 
 	"github.com/esauvisky/gitgram/internal/actions"
 	"github.com/esauvisky/gitgram/internal/cards"
+	"github.com/esauvisky/gitgram/internal/event"
 	"github.com/esauvisky/gitgram/internal/gitlab/api"
 	"github.com/esauvisky/gitgram/internal/store"
 )
@@ -38,7 +39,7 @@ func (e *Engine) Can(k actions.Kind, a actions.Action) bool {
 		return false
 	}
 	switch a {
-	case actions.ActionCancel, actions.ActionCancelYes, actions.ActionCancelNo, actions.ActionRetry:
+	case actions.ActionCancel, actions.ActionCancelYes, actions.ActionCancelNo, actions.ActionCancelForce, actions.ActionRetry:
 		return true
 	}
 	return false
@@ -52,7 +53,7 @@ func (e *Engine) canGitHub(k actions.Kind, a actions.Action) bool {
 		return false
 	}
 	switch a {
-	case actions.ActionCancel, actions.ActionCancelYes, actions.ActionCancelNo, actions.ActionRetry:
+	case actions.ActionCancel, actions.ActionCancelYes, actions.ActionCancelNo, actions.ActionCancelForce, actions.ActionRetry:
 		return true
 	}
 	return false
@@ -64,9 +65,10 @@ type githubCaps struct{ e *Engine }
 func (c githubCaps) Can(k actions.Kind, a actions.Action) bool { return c.e.canGitHub(k, a) }
 
 // Dispatch implements actions.Dispatcher. Stop and its "keep running"
-// answer only flip the card's confirmation; "yes, stop it" and Retry make
-// the GitLab or GitHub call (by the project's host) and answer with a
-// toast, and the resulting webhooks update the card.
+// answer only flip the card's confirmation; "yes, stop it", Force stop and
+// Retry make the GitLab or GitHub call (by the project's host) and answer
+// with a toast; a stopped pipeline is re-read at once, the rest waits for
+// the webhooks.
 func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Result, error) {
 	gh := req.ProjectID < 0
 	switch {
@@ -107,6 +109,12 @@ func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Res
 			return actions.Result{}, err
 		}
 		_, err = e.writer.CancelPipeline(ctx, req.ProjectID, req.ObjectID)
+		if err == nil {
+			e.rereadPipeline(ctx, key)
+		}
+	case actions.ActionCancelForce:
+		err = e.forceStopPipeline(ctx, key)
+		toast = "Force-stopping pipeline " + id
 		if err == nil {
 			e.rereadPipeline(ctx, key)
 		}
@@ -161,6 +169,28 @@ func (e *Engine) retryPipeline(ctx context.Context, key cards.Key) error {
 		_, err = e.writer.RetryPipeline(ctx, key.ProjectID, key.ObjectID)
 	}
 	return err
+}
+
+// forceStopPipeline force-cancels every job of the pipeline still
+// canceling; GitLab has no pipeline-wide force cancel.
+func (e *Engine) forceStopPipeline(ctx context.Context, key cards.Key) error {
+	row, err := e.st.GetObject(ctx, skey(key))
+	if err != nil {
+		return err
+	}
+	var st cards.PipelineState
+	if err := unmarshalState(*row, &st); err != nil {
+		return err
+	}
+	for _, j := range st.SortedJobs() {
+		if j.Status != event.StatusCanceling {
+			continue
+		}
+		if _, err := e.writer.ForceCancelJob(ctx, key.ProjectID, j.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // rereadPipeline fetches a pipeline the bot just acted on and renders it,
@@ -284,9 +314,12 @@ func (e *Engine) dispatchGitHub(ctx context.Context, req actions.Request, key ca
 	ctx, cancel := context.WithTimeout(ctx, actionTimeout)
 	defer cancel()
 	toast := "Stopping workflow run"
-	if req.Action == actions.ActionRetry {
+	switch req.Action {
+	case actions.ActionRetry:
 		err, toast = e.gh.RerunFailed(ctx, st.Project.Path, req.ObjectID), "Re-running the failed jobs"
-	} else {
+	case actions.ActionCancelForce:
+		err, toast = e.gh.ForceCancelRun(ctx, st.Project.Path, req.ObjectID), "Force-stopping workflow run"
+	default:
 		err = e.gh.CancelRun(ctx, st.Project.Path, req.ObjectID)
 	}
 	if err != nil {
