@@ -146,16 +146,40 @@ const pushWait = 2 * time.Minute
 // push card, and one attached before its source was known is released.
 // While the source is still unknown (Job Hooks usually arrive before the
 // Pipeline Hook) and a live push card exists for the commit, hold reports
-// that no card should be posted yet. Child, tag and non-branch refs are
+// that no card should be posted yet. Child and non-branch refs are
 // skipped, as are projects without push cards.
+//
+// A pipeline with no live push card under its own ref (a tag, or a branch
+// whose Push Hook has not arrived) joins the live push card of its commit
+// on any other ref instead, when that card shows no other pipeline: a tag
+// pushed together with the branch it points at ends up on the branch's
+// card. GitHub never says whether a run's ref is a tag, so this is also
+// how its tag runs find the push.
 func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.Key, st *cards.PipelineState, received time.Time) (absorbed, hold bool, err error) {
-	if st.Parent != nil || st.Tag || st.SHA == "" || st.Ref == "" || strings.HasPrefix(st.Ref, "refs/") {
+	if st.Parent != nil || st.SHA == "" || st.Ref == "" || strings.HasPrefix(st.Ref, "refs/") {
 		return false, false, nil
 	}
 	pk := cards.PushKey(st.Project.ID, st.Ref, st.SHA)
 	push, row, err := load[cards.PushState](ctx, tx, pk, e.log)
 	if err != nil {
 		return false, false, err
+	}
+	if row == nil || !push.SeenPush {
+		other, otherRow, err := e.pushOfCommit(ctx, tx, st)
+		if err != nil {
+			return false, false, err
+		}
+		if other != nil {
+			// A skeleton under the pipeline's own ref must not absorb it
+			// too, should its Push Hook arrive after all.
+			if row != nil && push.Pipeline != nil && push.Pipeline.ID == st.ID {
+				push.ReleasePipeline()
+				if err := put(ctx, tx, pk, push, push.Final, row.LastEventAt); err != nil {
+					return false, false, err
+				}
+			}
+			pk, push, row = other.Key(), other, otherRow
+		}
 	}
 	confirmed := st.SeenPipelineEvent && st.Source == "push"
 	if row == nil {
@@ -234,6 +258,27 @@ func (e *Engine) syncPipelinePush(ctx context.Context, tx *store.Tx, key cards.K
 		return false, false, err
 	}
 	return push.Absorbs, false, e.enqueueCard(ctx, tx, pk, card, push.Final)
+}
+
+// pushOfCommit finds the live push card of st's commit on any ref that can
+// take st: posted, not superseded and showing no pipeline but st. Pushes
+// are scanned newest first, so the latest such push wins.
+func (e *Engine) pushOfCommit(ctx context.Context, tx *store.Tx, st *cards.PipelineState) (*cards.PushState, *store.ObjectRow, error) {
+	rows, err := tx.ListProject(ctx, string(cards.KindPush), st.Project.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i := range rows {
+		var push cards.PushState
+		if err := unmarshalState(rows[i], &push); err != nil {
+			return nil, nil, fmt.Errorf("decode push %v: %w", rows[i].Key, err)
+		}
+		if push.After != st.SHA || !push.SeenPush || push.Superseded || (push.Pipeline != nil && push.Pipeline.ID != st.ID) {
+			continue
+		}
+		return &push, &rows[i], nil
+	}
+	return nil, nil, nil
 }
 
 // publishPipeline pushes a changed pipeline state to every card that shows
