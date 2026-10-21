@@ -107,6 +107,9 @@ func (e *Engine) Dispatch(ctx context.Context, req actions.Request) (actions.Res
 			return actions.Result{}, err
 		}
 		_, err = e.writer.CancelPipeline(ctx, req.ProjectID, req.ObjectID)
+		if err == nil {
+			e.rereadPipeline(ctx, key)
+		}
 	case actions.ActionRetry:
 		if err := e.setConfirmStop(ctx, key, false); err != nil {
 			return actions.Result{}, err
@@ -158,6 +161,20 @@ func (e *Engine) retryPipeline(ctx context.Context, key cards.Key) error {
 		_, err = e.writer.RetryPipeline(ctx, key.ProjectID, key.ObjectID)
 	}
 	return err
+}
+
+// rereadPipeline fetches a pipeline the bot just acted on and renders it,
+// so the card shows the outcome before the webhooks report it.
+func (e *Engine) rereadPipeline(ctx context.Context, key cards.Key) {
+	if e.api == nil {
+		return // reading needs GITGRAM_GITLAB_TOKEN; the webhooks still update the card
+	}
+	row, err := e.st.GetObject(ctx, skey(key))
+	if err != nil {
+		e.log.Error("reread after action", "key", key, "err", err)
+		return
+	}
+	e.reconcilePipeline(ctx, *row)
 }
 
 // setConfirmStop records whether the card is asking to confirm a stop and
