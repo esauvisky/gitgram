@@ -359,11 +359,14 @@ func hardFailures(jobs []cards.JobState) []cards.JobState {
 	return out
 }
 
+// RetryWindow is how long a stopped pipeline keeps its Retry button.
+const RetryWindow = time.Hour
+
 // pipelineKeyboard is the card's buttons: `Run <job>` for each manual job
 // waiting to be started (up to maxRunButtons), then `Stop pipeline` while
 // the pipeline is active, swapped for `Yes, stop it` and `Keep running`
 // once someone pressed it, `Force stop` while its jobs are canceling;
-// `Retry` once it failed.
+// `Retry` once it failed, or for RetryWindow after it was stopped.
 // Each needs the bot to be able to write to GitLab.
 func pipelineKeyboard(s *cards.PipelineState, v *pipelineView, o Options) [][]Button {
 	base := actions.Callback{Kind: actions.KindPipeline, ProjectID: s.Project.ID, ObjectID: s.ID}
@@ -401,13 +404,20 @@ func pipelineKeyboard(s *cards.PipelineState, v *pipelineView, o Options) [][]Bu
 		} else {
 			row = button("Stop pipeline", actions.ActionCancel)
 		}
-	case v.status == event.StatusFailed && o.can(actions.KindPipeline, actions.ActionRetry):
+	case (v.status == event.StatusFailed || v.status == event.StatusCanceled && stoppedWithin(s, o.Now, RetryWindow)) &&
+		o.can(actions.KindPipeline, actions.ActionRetry):
 		row = button("Retry", actions.ActionRetry)
 	}
 	if len(row) > 0 {
 		kb = append(kb, row)
 	}
 	return kb
+}
+
+// stoppedWithin reports whether the pipeline finished less than d before
+// now; a pipeline whose finish time is not known yet reports false.
+func stoppedWithin(s *cards.PipelineState, now time.Time, d time.Duration) bool {
+	return s.FinishedAt != nil && now.Sub(*s.FinishedAt) < d
 }
 
 // maxRunButtons caps the Run buttons for manual jobs on one card.

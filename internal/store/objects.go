@@ -91,6 +91,30 @@ func (q queries) ListProject(ctx context.Context, kind string, projectID int64) 
 	return out, nil
 }
 
+// ListTouched returns objects of kind whose last event lies in [from, to).
+func (q queries) ListTouched(ctx context.Context, kind string, from, to time.Time) ([]ObjectRow, error) {
+	rows, err := q.db.QueryContext(ctx,
+		`SELECT `+objectColumns+` FROM object_state
+		 WHERE kind = ? AND last_event_at >= ? AND last_event_at < ? ORDER BY last_event_at`,
+		kind, from.Unix(), to.Unix())
+	if err != nil {
+		return nil, fmt.Errorf("list %q touched: %w", kind, err)
+	}
+	defer rows.Close()
+	var out []ObjectRow
+	for rows.Next() {
+		o, err := scanObject(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list %q touched: %w", kind, err)
+		}
+		out = append(out, *o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list %q touched: %w", kind, err)
+	}
+	return out, nil
+}
+
 // ExpireNonFinal marks non-final objects of kind whose last event precedes
 // olderThan as final, so Prune can retire them later. It returns the
 // number of rows changed.

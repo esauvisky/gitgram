@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/esauvisky/gitgram/internal/actions"
 	"github.com/esauvisky/gitgram/internal/cards"
@@ -60,6 +61,7 @@ func (e *Engine) options(p event.Project) render.Options {
 	}
 	return render.Options{
 		Caps: caps,
+		Now:  time.Now(),
 	}
 }
 

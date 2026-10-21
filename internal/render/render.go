@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/esauvisky/gitgram/internal/actions"
 	"github.com/esauvisky/gitgram/internal/event"
@@ -58,6 +59,9 @@ type Options struct {
 	// Caps decides which in-message operation buttons are drawn; nil draws
 	// none.
 	Caps actions.Capabilities
+	// Now is when the card is rendered; a button that expires (Retry on a
+	// stopped pipeline) is judged against it.
+	Now time.Time
 }
 
 func (o Options) can(k actions.Kind, a actions.Action) bool {
